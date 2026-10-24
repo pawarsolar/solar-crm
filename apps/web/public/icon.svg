@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="128" fill="#0f172a"/>
+  <circle cx="256" cy="256" r="110" fill="#f59e0b"/>
+  <!-- Solar Rays -->
+  <g stroke="#f59e0b" stroke-width="28" stroke-linecap="round">
+    <line x1="256" y1="56" x2="256" y2="100"/>
+    <line x1="256" y1="412" x2="256" y2="456"/>
+    <line x1="56" y1="256" x2="100" y2="256"/>
+    <line x1="412" y1="256" x2="456" y2="256"/>
+    <line x1="115" y1="115" x2="146" y2="146"/>
+    <line x1="366" y1="366" x2="397" y2="397"/>
+    <line x1="115" y1="397" x2="146" y2="366"/>
+    <line x1="366" y1="146" x2="397" y2="115"/>
+  </g>
+  <!-- Solar Panel PV Grid in Center -->
+  <polygon points="190,210 322,210 342,302 170,302" fill="#0f172a" stroke="#fcd34d" stroke-width="8"/>
+  <line x1="256" y1="210" x2="256" y2="302" stroke="#fcd34d" stroke-width="8"/>
+  <line x1="180" y1="256" x2="332" y2="256" stroke="#fcd34d" stroke-width="8"/>
+</svg>

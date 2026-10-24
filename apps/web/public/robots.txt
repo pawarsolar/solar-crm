@@ -1,0 +1,11 @@
+User-agent: *
+Disallow: /leads
+Disallow: /quotations
+Disallow: /surveys
+Disallow: /payments
+Disallow: /admin
+Disallow: /import
+Allow: /login
+Allow: /public/
+
+Sitemap: https://solarepc.app/sitemap.xml

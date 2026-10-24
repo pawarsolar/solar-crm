@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Solar EPC CRM | Kyros Solar Pipeline & Quotation Platform</title>
+    <meta name="description" content="Mobile-first Solar EPC CRM for rooftop solar contractors: pipeline management, PM Surya Ghar subsidy calculations, site surveys, and payment tracking." />
+    
+    <!-- OpenGraph & Social Cards -->
+    <meta property="og:title" content="Solar EPC CRM | Kyros Solar Platform" />
+    <meta property="og:description" content="Manage rooftop solar pipeline, site surveys, PM Surya Ghar proposals, and milestone payments." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- PWA & Mobile Configuration -->
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SolarCRM" />
+    
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Zero network font latency using modern native system stack -->
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background-color: #f8fafc;
+        color: #0f172a;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-900 select-none sm:select-auto">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

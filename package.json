@@ -1,0 +1,31 @@
+{
+  "name": "solar-epc-crm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-grade Solar EPC CRM (Local-first, Mobile-first PWA) with NestJS & Supabase",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace=apps/api run start:dev",
+    "dev:web": "npm --workspace=apps/web run dev",
+    "build:api": "npm --workspace=apps/api run build",
+    "build:web": "npm --workspace=apps/web run build",
+    "lint": "npm --workspaces run lint",
+    "test": "npm --workspaces run test",
+    "seed": "npm --workspace=apps/api run seed",
+    "seed:reset": "npm --workspace=apps/api run seed:reset"
+  },
+  "keywords": [
+    "solar",
+    "crm",
+    "epc",
+    "pwa",
+    "nestjs",
+    "supabase",
+    "react",
+    "vite"
+  ],
+  "author": "Kyros Solar Engineering",
+  "license": "UNLICENSED"
+}
