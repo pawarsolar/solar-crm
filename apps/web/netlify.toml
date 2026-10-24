@@ -1,0 +1,7 @@
+[build]
+  command = "NODE_OPTIONS=--max-old-space-size=4096 npm --workspace @solar-crm/web run build"
+
+[build.environment]
+  # The site-wide NODE_OPTIONS (256MB heap, intended for the API) is too small
+  # for `tsc && vite build`; give the web build a larger heap.
+  NODE_OPTIONS = "--max-old-space-size=4096"
