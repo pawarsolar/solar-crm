@@ -100,7 +100,7 @@ function generateRealisticLeads(count = 300): any[] {
 @Injectable()
 export class LeadsService {
   private readonly logger = new Logger(LeadsService.name);
-  private inMemoryLeads = generateRealisticLeads(300);
+  private inMemoryLeads: any[] = [];
   private inMemoryAuditLogs: any[] = [];
 
   constructor(
@@ -1189,17 +1189,53 @@ export class LeadsService {
     };
   }
 
-  async approveDelete(id: string, user: AuthUser) {
-    if (!this.isAdmin(user)) {
-      throw new ForbiddenException('Only administrators can approve lead deletion');
+  /**
+   * Super Admin only: Purges all seed/mock leads to leave the pipeline completely fresh
+   * for fresh data entry or fresh lead imports.
+   */
+  async purgeSeedData(user: AuthUser) {
+    if (user.role !== 'super_admin') {
+      throw new ForbiddenException('Only Super Admin can purge seed pipeline data');
+    }
+    const count = this.inMemoryLeads.length;
+    this.inMemoryLeads = [];
+
+    try {
+      await this.supabaseService.client
+        .from('leads')
+        .delete()
+        .eq('org_id', user.org_id);
+    } catch {
+      // Offline fallback ok
     }
 
-    const now = new Date().toISOString();
+    return {
+      success: true,
+      message: 'All seed data in the sales pipeline has been cleared. Fresh leads can now be added by Super Admin.',
+      cleared_count: count,
+    };
+  }
+
+  /**
+   * Only Super Admin has permission to delete lead data.
+   * Provides a 30-day recovery option before permanent deletion.
+   */
+  async softDelete(id: string, user: AuthUser) {
+    if (user.role !== 'super_admin') {
+      throw new ForbiddenException('Only Super Admin has permission to delete leads from the pipeline');
+    }
+
+    const now = new Date();
+    const deletedAt = now.toISOString();
+    const recoveryDeadline = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     try {
       const { data, error } = await this.supabaseService.client
         .from('leads')
-        .update({ deleted_at: now, updated_at: now })
+        .update({
+          deleted_at: deletedAt,
+          updated_at: deletedAt,
+        })
         .eq('id', id)
         .eq('org_id', user.org_id)
         .select('id, name, deleted_at')
@@ -1208,12 +1244,19 @@ export class LeadsService {
       if (!error && data) {
         await this.supabaseService.client
           .from('deletion_requests')
-          .update({ status: 'approved', decided_by: user.id, decided_at: now })
+          .update({ status: 'approved', decided_by: user.id, decided_at: deletedAt })
           .eq('entity', 'lead')
           .eq('entity_id', id)
           .eq('status', 'pending');
 
-        return { message: 'Lead soft-deleted successfully', id, deleted_at: data.deleted_at };
+        return {
+          success: true,
+          message: 'Lead moved to 30-day Recovery Bin. Only Super Admin can restore or permanently delete it.',
+          id,
+          deleted_at: deletedAt,
+          recovery_deadline: recoveryDeadline,
+          days_remaining: 30,
+        };
       }
     } catch {
       // Fall through to in-memory fallback
@@ -1223,12 +1266,176 @@ export class LeadsService {
     if (!localLead) {
       throw new NotFoundException(`Lead with ID ${id} not found`);
     }
-    localLead.deleted_at = now;
-    localLead.updated_at = now;
-    return { message: 'Lead soft-deleted successfully', id, deleted_at: now };
+
+    localLead.deleted_at = deletedAt;
+    localLead.recovery_deadline = recoveryDeadline;
+    localLead.deleted_by = user.id;
+    localLead.deleted_by_name = user.full_name || 'Super Admin';
+    localLead.updated_at = deletedAt;
+
+    return {
+      success: true,
+      message: 'Lead moved to 30-day Recovery Bin. Only Super Admin can restore or permanently delete it.',
+      id,
+      deleted_at: deletedAt,
+      recovery_deadline: recoveryDeadline,
+      days_remaining: 30,
+    };
   }
 
-  async softDelete(id: string, user: AuthUser) {
-    return this.approveDelete(id, user);
+  async approveDelete(id: string, user: AuthUser) {
+    return this.softDelete(id, user);
+  }
+
+  /**
+   * Super Admin only: List all leads in the 30-day Recovery Bin.
+   * Auto-purges items where 30 days have elapsed.
+   */
+  async getRecoveryBin(user: AuthUser) {
+    if (user.role !== 'super_admin') {
+      throw new ForbiddenException('Only Super Admin can access the Lead Recovery Bin');
+    }
+
+    const now = Date.now();
+
+    // In-memory recovery bin: auto-purge expired leads (> 30 days)
+    this.inMemoryLeads = this.inMemoryLeads.filter((lead) => {
+      if (!lead.deleted_at) return true;
+      if (lead.recovery_deadline && new Date(lead.recovery_deadline).getTime() < now) {
+        return false; // Permanently expired
+      }
+      return true;
+    });
+
+    const deletedInMemory = this.inMemoryLeads
+      .filter((lead) => !!lead.deleted_at)
+      .map((lead) => {
+        const deadlineTime = lead.recovery_deadline
+          ? new Date(lead.recovery_deadline).getTime()
+          : new Date(lead.deleted_at).getTime() + 30 * 24 * 60 * 60 * 1000;
+        const diffMs = deadlineTime - now;
+        const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+        return {
+          id: lead.id,
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          city: lead.city,
+          state: lead.state,
+          source: lead.source,
+          stage: lead.stage,
+          system_kw: lead.system_kw,
+          deleted_at: lead.deleted_at,
+          recovery_deadline: lead.recovery_deadline || new Date(deadlineTime).toISOString(),
+          days_remaining: daysRemaining,
+          deleted_by_name: lead.deleted_by_name || 'Super Admin',
+        };
+      });
+
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('leads')
+        .select('*')
+        .eq('org_id', user.org_id)
+        .not('deleted_at', 'is', null);
+
+      if (!error && data && data.length > 0) {
+        return data.map((lead: any) => {
+          const deletedAtTime = new Date(lead.deleted_at).getTime();
+          const deadlineTime = deletedAtTime + 30 * 24 * 60 * 60 * 1000;
+          const daysRemaining = Math.max(0, Math.ceil((deadlineTime - now) / (1000 * 60 * 60 * 24)));
+          return {
+            ...lead,
+            recovery_deadline: new Date(deadlineTime).toISOString(),
+            days_remaining: daysRemaining,
+            deleted_by_name: 'Super Admin',
+          };
+        });
+      }
+    } catch {
+      // Fall through to in-memory
+    }
+
+    return deletedInMemory;
+  }
+
+  /**
+   * Super Admin only: Restore a soft-deleted lead within the 30-day window back to active pipeline.
+   */
+  async restoreLead(id: string, user: AuthUser) {
+    if (user.role !== 'super_admin') {
+      throw new ForbiddenException('Only Super Admin can restore deleted leads');
+    }
+
+    const now = new Date().toISOString();
+
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('leads')
+        .update({
+          deleted_at: null,
+          updated_at: now,
+        })
+        .eq('id', id)
+        .eq('org_id', user.org_id)
+        .select('*')
+        .single();
+
+      if (!error && data) {
+        return {
+          success: true,
+          message: `Lead ${data.name} successfully restored to the sales pipeline`,
+          lead: data,
+        };
+      }
+    } catch {
+      // Fall through to in-memory
+    }
+
+    const localLead = this.inMemoryLeads.find((l) => l.id === id);
+    if (!localLead) {
+      throw new NotFoundException(`Lead with ID ${id} not found in recovery bin`);
+    }
+
+    localLead.deleted_at = null;
+    localLead.recovery_deadline = null;
+    localLead.updated_at = now;
+
+    return {
+      success: true,
+      message: `Lead ${localLead.name} successfully restored to the sales pipeline`,
+      lead: localLead,
+    };
+  }
+
+  /**
+   * Super Admin only: Permanently purge a lead from the recovery bin.
+   */
+  async permanentlyDelete(id: string, user: AuthUser) {
+    if (user.role !== 'super_admin') {
+      throw new ForbiddenException('Only Super Admin can permanently delete leads');
+    }
+
+    try {
+      await this.supabaseService.client
+        .from('leads')
+        .delete()
+        .eq('id', id)
+        .eq('org_id', user.org_id);
+    } catch {
+      // Fall through
+    }
+
+    const index = this.inMemoryLeads.findIndex((l) => l.id === id);
+    if (index !== -1) {
+      this.inMemoryLeads.splice(index, 1);
+    }
+
+    return {
+      success: true,
+      message: 'Lead permanently deleted from system',
+      id,
+    };
   }
 }

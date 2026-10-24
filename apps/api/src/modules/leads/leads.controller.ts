@@ -127,6 +127,34 @@ export class LeadsController {
     return this.leadsService.updateStage(id, updateStageDto, user);
   }
 
+  @Delete('purge-seed')
+  @RequireFeature('leads')
+  @Roles('super_admin')
+  async purgeSeedData(@CurrentUser() user: AuthUser) {
+    return this.leadsService.purgeSeedData(user);
+  }
+
+  @Get('recovery/bin')
+  @RequireFeature('leads')
+  @Roles('super_admin')
+  async getRecoveryBin(@CurrentUser() user: AuthUser) {
+    return this.leadsService.getRecoveryBin(user);
+  }
+
+  @Post(':id/restore')
+  @RequireFeature('leads')
+  @Roles('super_admin')
+  async restoreLead(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.leadsService.restoreLead(id, user);
+  }
+
+  @Delete(':id/permanent')
+  @RequireFeature('leads')
+  @Roles('super_admin')
+  async permanentlyDelete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.leadsService.permanentlyDelete(id, user);
+  }
+
   @Post(':id/followup')
   @RequireFeature('leads')
   @Roles('super_admin', 'sales_admin', 'telecaller', 'sales_exec')
@@ -158,7 +186,7 @@ export class LeadsController {
 
   @Post(':id/approve-delete')
   @RequireFeature('leads')
-  @Roles('super_admin', 'sales_admin')
+  @Roles('super_admin')
   async approveDelete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.leadsService.approveDelete(id, user);
   }

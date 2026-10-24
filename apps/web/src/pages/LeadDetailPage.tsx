@@ -74,6 +74,22 @@ export const LeadDetailPage: React.FC = () => {
     onError: (err: any) => alert(err.message),
   });
 
+  const isSuperAdmin = user?.role === 'super_admin';
+
+  const directDeleteMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/leads/${id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: (res) => {
+      setShowDeleteModal(false);
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      alert(res.message || 'Lead moved to 30-day Recovery Bin. It can be restored anytime by Super Admin within 30 days.');
+      navigate('/leads');
+    },
+    onError: (err: any) => alert(err.message),
+  });
+
   const deleteRequestMutation = useMutation({
     mutationFn: () =>
       apiRequest(`/leads/${id}/request-delete`, {
@@ -125,13 +141,23 @@ export const LeadDetailPage: React.FC = () => {
           <span>Back to Pipeline</span>
         </button>
 
-        <button
-          onClick={() => setShowDeleteModal(true)}
-          className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          <span>Request Delete</span>
-        </button>
+        {isSuperAdmin ? (
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50/50 hover:bg-rose-100/50 transition-colors shadow-xs"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete Lead (30d Recovery)</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors shadow-xs"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Request Delete</span>
+          </button>
+        )}
       </div>
 
       {/* Main Lead Header Card */}
@@ -391,37 +417,85 @@ export const LeadDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* Deletion Request Modal */}
+      {/* Deletion Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-xl">
-            <h3 className="font-bold text-slate-900 text-base">Request Lead Deletion</h3>
-            <p className="text-xs text-slate-500">
-              Sales staff cannot hard-delete records directly. State a clear justification for admin approval:
-            </p>
-            <textarea
-              rows={3}
-              required
-              placeholder="e.g. Duplicate phone entry or customer firmly requested data deletion under DPDP Act"
-              value={deletionReason}
-              onChange={(e) => setDeletionReason(e.target.value)}
-              className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-slate-200 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => deleteRequestMutation.mutate()}
-                disabled={!deletionReason || deleteRequestMutation.isPending}
-                className="flex-1 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-500"
-              >
-                Submit Request
-              </button>
-            </div>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl border border-slate-100">
+            {isSuperAdmin ? (
+              <>
+                <div className="flex items-center gap-2.5 text-rose-600">
+                  <div className="p-2 rounded-xl bg-rose-50 border border-rose-200">
+                    <Trash2 className="w-5 h-5 text-rose-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base">Delete Lead (30-Day Recovery)</h3>
+                    <p className="text-xs text-slate-500">Super Admin privileged action</p>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3 text-xs text-amber-900 leading-relaxed">
+                  <p className="font-bold mb-1">🛡️ 30-Day Safety Recovery Window</p>
+                  <p>
+                    This lead will be removed from the active pipeline and placed in the{' '}
+                    <strong>Recovery Bin</strong>. You can restore this lead anytime within <strong>30 days</strong>.
+                    After 30 days, it is permanently erased.
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    className="flex-1 py-2.5 text-xs font-semibold rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => directDeleteMutation.mutate()}
+                    disabled={directDeleteMutation.isPending}
+                    className="flex-1 py-2.5 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-500 shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    {directDeleteMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Move to Recovery Bin</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="font-bold text-slate-900 text-base">Request Lead Deletion</h3>
+                <p className="text-xs text-slate-500">
+                  Only the Super Admin has permissions to delete pipeline records. Submit a justification for Super Admin review:
+                </p>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="e.g. Duplicate phone entry or customer firmly requested data deletion under DPDP Act"
+                  value={deletionReason}
+                  onChange={(e) => setDeletionReason(e.target.value)}
+                  className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    className="flex-1 py-2 text-xs font-semibold rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => deleteRequestMutation.mutate()}
+                    disabled={!deletionReason || deleteRequestMutation.isPending}
+                    className="flex-1 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-500"
+                  >
+                    {deleteRequestMutation.isPending ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

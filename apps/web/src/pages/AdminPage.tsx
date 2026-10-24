@@ -22,6 +22,11 @@ import {
   RotateCcw,
   ShieldCheck,
   Check,
+  Globe,
+  MapPin,
+  Laptop,
+  Smartphone,
+  Clock,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -50,7 +55,7 @@ const ASSIGNABLE_ROLES = [
 type Matrix = Record<string, Record<string, boolean>>;
 
 interface AdminPageProps {
-  initialTab?: 'users' | 'allocation' | 'features' | 'deletions' | 'pricing';
+  initialTab?: 'users' | 'allocation' | 'features' | 'deletions' | 'pricing' | 'security';
 }
 
 export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
@@ -63,7 +68,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
     if (initialTab) return initialTab;
     const searchParams = new URLSearchParams(location.search);
     const tabParam = searchParams.get('tab') as any;
-    if (tabParam && ['users', 'allocation', 'features', 'deletions', 'pricing'].includes(tabParam)) {
+    if (tabParam && ['users', 'allocation', 'features', 'deletions', 'pricing', 'security'].includes(tabParam)) {
       return tabParam;
     }
     if (location.pathname.includes('/allocation')) return 'allocation';
@@ -71,7 +76,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
     return isSuperAdmin ? 'users' : 'allocation';
   }, [initialTab, location.pathname, location.search, isSuperAdmin]);
 
-  const [activeTab, setActiveTab] = useState<'users' | 'allocation' | 'features' | 'deletions' | 'pricing'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'allocation' | 'features' | 'deletions' | 'pricing' | 'security'>(defaultTab);
 
   // Search filter for staff
   const [userSearch, setUserSearch] = useState('');
@@ -173,6 +178,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
     if (role === 'accounts') return ['export_excel', 'export_pdf', 'payments', 'subsidy', 'reports', 'kpi_dashboard', 'whatsapp'].includes(featureKey);
     return false;
   };
+
+  const {
+    data: adminActivity = [],
+    isLoading: isLoadingAdminActivity,
+    refetch: refetchAdminActivity,
+  } = useQuery({
+    queryKey: ['admin-activity'],
+    queryFn: () => apiRequest('/auth/admin/activity'),
+    enabled: isSuperAdmin && activeTab === 'security',
+  });
 
   // Filtered users list
   const filteredUsers = useMemo(() => {
@@ -371,6 +386,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
               { key: 'allocation', label: 'Bulk Lead Allocation', icon: Users },
               { key: 'features', label: `Role Feature Access Matrix (${pendingCount > 0 ? `${pendingCount} unsaved` : 'Active'})`, icon: ShieldCheck },
               { key: 'deletions', label: `Deletion Approvals (${deletionRequests?.length || 0})`, icon: Trash2 },
+              { key: 'security', label: 'Login & Device Audit', icon: ShieldAlert },
               { key: 'pricing', label: 'Master Price Book', icon: BookOpen },
             ]
           : [
@@ -791,6 +807,125 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
                 <p className="text-sm font-bold text-slate-900 mt-1">{p.price}</p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 6: LOGIN ACTIVITY, IP & THREE-DEVICE AUDIT */}
+      {activeTab === 'security' && isSuperAdmin && (
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-xs space-y-1.5">
+              <div className="flex items-center gap-2 text-amber-600 font-bold text-xs uppercase tracking-wider">
+                <Laptop className="w-4 h-4" />
+                <span>Device Concurrency Policy</span>
+              </div>
+              <p className="text-xl font-black text-slate-900">3 Devices Max</p>
+              <p className="text-xs text-slate-500">
+                Active limit strictly enforced. 4th device auto-revokes oldest session.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-xs space-y-1.5">
+              <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs uppercase tracking-wider">
+                <Globe className="w-4 h-4" />
+                <span>IP & Geolocation Trace</span>
+              </div>
+              <p className="text-xl font-black text-slate-900">Real-time Tracing</p>
+              <p className="text-xs text-slate-500">
+                Identifies IP address, ISP headers, city, and client browser specs.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-xs space-y-1.5">
+              <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs uppercase tracking-wider">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Audited Login Events</span>
+              </div>
+              <p className="text-xl font-black text-slate-900">{adminActivity.length} Records</p>
+              <p className="text-xs text-slate-500">
+                Complete security audit trail maintained across all employee accounts.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Organization Login Activity & Device Audit</h3>
+                <p className="text-xs text-slate-500">Audit trail of employee IP addresses, resolved locations, and device types</p>
+              </div>
+              <button
+                onClick={() => refetchAdminActivity()}
+                className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-500" />
+                <span>Refresh Log</span>
+              </button>
+            </div>
+
+            {isLoadingAdminActivity ? (
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                <Loader2 className="w-7 h-7 animate-spin text-amber-500 mb-2" />
+                <p className="text-xs">Fetching audit records...</p>
+              </div>
+            ) : adminActivity.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 text-xs">
+                No login activities recorded yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="p-3.5 pl-5">Timestamp</th>
+                      <th className="p-3.5">User Email</th>
+                      <th className="p-3.5">Device & Browser</th>
+                      <th className="p-3.5">IP Address</th>
+                      <th className="p-3.5">Location</th>
+                      <th className="p-3.5 pr-5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {adminActivity.map((log: any) => (
+                      <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="p-3.5 pl-5 text-slate-500 whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleDateString()}{' '}
+                          <span className="text-[11px] text-slate-400">
+                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-bold text-slate-900">{log.email}</td>
+                        <td className="p-3.5 text-slate-700">
+                          <div className="font-semibold">{log.device_name}</div>
+                          <div className="text-[11px] text-slate-400">{log.os} • {log.browser}</div>
+                        </td>
+                        <td className="p-3.5 font-mono text-[11px] text-slate-600">{log.ip_address}</td>
+                        <td className="p-3.5 text-slate-700">
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>{log.location}</span>
+                          </div>
+                        </td>
+                        <td className="p-3.5 pr-5">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border inline-block ${
+                              log.status === 'SUCCESS'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : log.status === 'REVOKED'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}
+                          >
+                            {log.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

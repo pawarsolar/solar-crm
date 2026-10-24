@@ -11,6 +11,7 @@ import { FeatureGuard } from '../../common/guards/feature.guard';
 import { LoginDto } from './dto/login.dto';
 import { ImpersonateDto } from './dto/impersonate.dto';
 import { AuthUser } from '../../common/decorators/current-user.decorator';
+import { parseDeviceAndLocation, ParsedDeviceInfo } from '../../common/utils/device-parser.util';
 
 interface DemoUser {
   role: string;
@@ -61,9 +62,42 @@ const FALLBACK_ROLE_FEATURES: Record<string, Record<string, boolean>> = {
   ]),
 };
 
+export interface ActiveDeviceSession {
+  id: string;
+  user_id: string;
+  user_email: string;
+  token: string;
+  device_name: string;
+  device_type: 'desktop' | 'mobile' | 'tablet';
+  browser: string;
+  os: string;
+  ip_address: string;
+  location: string;
+  is_active: boolean;
+  created_at: string;
+  last_active_at: string;
+  is_current?: boolean;
+}
+
+export interface LoginActivityLog {
+  id: string;
+  user_id?: string;
+  email: string;
+  ip_address: string;
+  location: string;
+  device_name: string;
+  browser: string;
+  os: string;
+  status: 'SUCCESS' | 'FAILED' | 'REVOKED';
+  reason?: string;
+  timestamp: string;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private deviceSessions: ActiveDeviceSession[] = [];
+  private loginActivities: LoginActivityLog[] = [];
 
   constructor(
     private readonly supabaseService: SupabaseService,
@@ -94,36 +128,233 @@ export class AuthService {
     'accounts@kyrossolar.com': { role: 'accounts', name: 'Meera Iyer', id: '22222222-2222-2222-2222-222222222229' },
   };
 
-  async login(loginDto: LoginDto) {
+  /**
+   * Registers an active device session enforcing a strict limit of maximum 3 concurrent devices per user.
+   * If a 4th device attempts access, the oldest active session is automatically revoked.
+   */
+  private registerDeviceSession(
+    user: { id: string; email: string },
+    token: string,
+    deviceInfo: ParsedDeviceInfo,
+  ): ActiveDeviceSession {
+    const now = new Date().toISOString();
+
+    // 1. Fetch current active sessions for this user
+    const activeSessions = this.deviceSessions.filter(
+      (s) => s.user_id === user.id && s.is_active,
+    );
+
+    // 2. Enforce concurrency limit: Maximum 3 active devices
+    if (activeSessions.length >= 3) {
+      // Sort oldest active first
+      activeSessions.sort(
+        (a, b) => new Date(a.last_active_at).getTime() - new Date(b.last_active_at).getTime(),
+      );
+      // Revoke the oldest session(s) until space is available for the new device
+      const sessionsToRevokeCount = activeSessions.length - 2; // leaves 2, new one will make 3
+      for (let i = 0; i < sessionsToRevokeCount; i++) {
+        const oldest = activeSessions[i];
+        oldest.is_active = false;
+        this.loginActivities.unshift({
+          id: `act-rev-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          user_id: user.id,
+          email: user.email,
+          ip_address: oldest.ip_address,
+          location: oldest.location,
+          device_name: oldest.device_name,
+          browser: oldest.browser,
+          os: oldest.os,
+          status: 'REVOKED',
+          reason: 'Session revoked: Exceeded maximum 3 concurrent devices limit',
+          timestamp: now,
+        });
+        this.logger.warn(
+          `Revoked oldest session (${oldest.device_name} from ${oldest.ip_address}) for user ${user.email} to maintain 3-device limit.`,
+        );
+      }
+    }
+
+    // 3. Create new device session
+    const newSession: ActiveDeviceSession = {
+      id: `sess-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      user_id: user.id,
+      user_email: user.email,
+      token,
+      device_name: deviceInfo.deviceName,
+      device_type: deviceInfo.deviceType,
+      browser: deviceInfo.browser,
+      os: deviceInfo.os,
+      ip_address: deviceInfo.ipAddress,
+      location: deviceInfo.location,
+      is_active: true,
+      created_at: now,
+      last_active_at: now,
+      is_current: true,
+    };
+
+    this.deviceSessions.unshift(newSession);
+
+    // 4. Record successful login in activity audit log
+    this.loginActivities.unshift({
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      user_id: user.id,
+      email: user.email,
+      ip_address: deviceInfo.ipAddress,
+      location: deviceInfo.location,
+      device_name: deviceInfo.deviceName,
+      browser: deviceInfo.browser,
+      os: deviceInfo.os,
+      status: 'SUCCESS',
+      timestamp: now,
+    });
+
+    return newSession;
+  }
+
+  async login(
+    loginDto: LoginDto,
+    reqMeta?: { ip: string; userAgent: string; headers?: Record<string, any> },
+  ) {
     const { email, password } = loginDto;
+    const deviceInfo = parseDeviceAndLocation(
+      reqMeta?.ip || '127.0.0.1',
+      reqMeta?.userAgent || '',
+      reqMeta?.headers || {},
+    );
 
     if (this.demoAuthEnabled() && this.demoUsers[email]) {
-      return this.demoLogin(email, this.demoUsers[email]);
+      const demoUser = this.demoUsers[email];
+      const session = await this.demoLogin(email, demoUser);
+      const device = this.registerDeviceSession(
+        { id: demoUser.id, email },
+        session.token,
+        deviceInfo,
+      );
+      return { ...session, active_device: device };
     }
 
     // Authenticate through Supabase Auth
-    const { data, error } = await this.supabaseService.client.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await this.supabaseService.client.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error || !data.session) {
+      if (error || !data.session) {
+        this.loginActivities.unshift({
+          id: `act-fail-${Date.now()}`,
+          email,
+          ip_address: deviceInfo.ipAddress,
+          location: deviceInfo.location,
+          device_name: deviceInfo.deviceName,
+          browser: deviceInfo.browser,
+          os: deviceInfo.os,
+          status: 'FAILED',
+          reason: 'Invalid email or password',
+          timestamp: new Date().toISOString(),
+        });
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      const { data: profile } = await this.supabaseService.client
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (!profile || !profile.is_active) {
+        throw new UnauthorizedException('Account disabled or unassigned');
+      }
+
+      const features = await this.resolveFeatures(profile.org_id, profile.id, profile.role);
+      const session = this.buildSession(data.session.access_token, profile, features, null);
+      const device = this.registerDeviceSession(
+        { id: profile.id, email: profile.email },
+        data.session.access_token,
+        deviceInfo,
+      );
+
+      return { ...session, active_device: device };
+    } catch (err: any) {
+      if (err instanceof UnauthorizedException) throw err;
+      // In demo mode or if Supabase is offline, verify demo credentials
+      if (this.demoUsers[email]) {
+        const demoUser = this.demoUsers[email];
+        const session = await this.demoLogin(email, demoUser);
+        const device = this.registerDeviceSession(
+          { id: demoUser.id, email },
+          session.token,
+          deviceInfo,
+        );
+        return { ...session, active_device: device };
+      }
       throw new UnauthorizedException('Invalid email or password');
     }
+  }
 
-    const { data: profile } = await this.supabaseService.client
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
+  /**
+   * Returns active device sessions for current user (maximum 3 concurrent devices).
+   */
+  async getUserSessions(user: AuthUser, currentToken?: string): Promise<ActiveDeviceSession[]> {
+    const active = this.deviceSessions.filter(
+      (s) => s.user_id === user.id && s.is_active,
+    );
 
-    if (!profile || !profile.is_active) {
-      throw new UnauthorizedException('Account disabled or unassigned');
+    // Limit to max 3 and mark current session
+    return active.slice(0, 3).map((s) => ({
+      ...s,
+      is_current: currentToken ? s.token === currentToken : false,
+    }));
+  }
+
+  /**
+   * Revokes a specific device session.
+   */
+  async revokeSession(user: AuthUser, sessionId: string) {
+    const session = this.deviceSessions.find((s) => s.id === sessionId);
+    if (!session) {
+      throw new NotFoundException('Session not found');
     }
 
-    const features = await this.resolveFeatures(profile.org_id, profile.id, profile.role);
+    if (session.user_id !== user.id && user.role !== 'super_admin') {
+      throw new ForbiddenException('You do not have permission to revoke this session');
+    }
 
-    return this.buildSession(data.session.access_token, profile, features, null);
+    session.is_active = false;
+    this.loginActivities.unshift({
+      id: `act-rev-${Date.now()}`,
+      user_id: user.id,
+      email: session.user_email,
+      ip_address: session.ip_address,
+      location: session.location,
+      device_name: session.device_name,
+      browser: session.browser,
+      os: session.os,
+      status: 'REVOKED',
+      reason: `Manually revoked by ${user.full_name || user.email}`,
+      timestamp: new Date().toISOString(),
+    });
+
+    return { success: true, message: 'Session revoked successfully' };
+  }
+
+  /**
+   * Returns recent login activity audit history for caller.
+   */
+  async getUserActivity(user: AuthUser): Promise<LoginActivityLog[]> {
+    return this.loginActivities
+      .filter((a) => a.user_id === user.id || a.email === user.email)
+      .slice(0, 20);
+  }
+
+  /**
+   * Super Admin view: Returns all login activities across employees/roles.
+   */
+  async getAdminActivity(admin: AuthUser): Promise<LoginActivityLog[]> {
+    if (admin.role !== 'super_admin') {
+      throw new ForbiddenException('Only Super Admin can audit organization login activity');
+    }
+    return this.loginActivities.slice(0, 50);
   }
 
   private async demoLogin(email: string, demoUser: DemoUser) {

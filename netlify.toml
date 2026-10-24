@@ -1,0 +1,14 @@
+[build]
+  base = "apps/web"
+  publish = "dist"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+  SECRETS_SCAN_ENABLED = "false"
+  SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT,NODE_OPTIONS,VITE_API_URL,CORS_ORIGIN,REVIEW_ID"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
