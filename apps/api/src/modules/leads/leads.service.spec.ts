@@ -86,13 +86,12 @@ describe('LeadsService assertVisible (ownership scoping)', () => {
     );
   });
 
-  it('allows a non-owner when the telecalling grant is present', async () => {
+  it('allows an admin to view any lead across the pool', async () => {
     const service = makeService({
       lead: { id: 'l1', org_id: ORG, owner_id: OTHER, created_by: OTHER, team_id: null, stage: 'NEW' },
-      telecalling: true,
     });
 
-    await expect(service['assertVisible']('l1', execUser)).resolves.toBeDefined();
+    await expect(service['assertVisible']('l1', adminUser)).resolves.toBeDefined();
   });
 
   it('allows a teammate to read a lead assigned to their team', async () => {
@@ -130,9 +129,10 @@ describe('LeadsService visibilityFilter', () => {
     await expect(service['visibilityFilter'](adminUser)).resolves.toBeNull();
   });
 
-  it('returns null when telecalling is granted', async () => {
+  it('scopes non-admin users to assigned ownership and team', async () => {
     const service = makeService({ telecalling: true });
-    await expect(service['visibilityFilter'](execUser)).resolves.toBeNull();
+    const filter = await service['visibilityFilter'](execUser);
+    expect(filter).toBe(`owner_id.eq.${LEAD_OWNER},created_by.eq.${LEAD_OWNER}`);
   });
 
   it('scopes to owner-or-creator when no grant and no team', async () => {

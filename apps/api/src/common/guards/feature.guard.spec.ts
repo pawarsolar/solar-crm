@@ -106,7 +106,7 @@ describe('FeatureGuard fail-closed policy (database unreachable)', () => {
     const { guard } = makeGuard(null, { message: 'fetch failed' });
 
     await expect(
-      guard.resolveFeatureFlag('org-1', 'user-1', 'sales_exec', 'payments'),
+      guard.resolveFeatureFlag('org-1', 'user-1', 'sales_exec', 'installation'),
     ).resolves.toBe(false);
   });
 
@@ -129,7 +129,7 @@ describe('FeatureGuard canActivate', () => {
 
   it('lets super_admin bypass every feature lock', async () => {
     const { guard, reflector } = makeGuard([]);
-    (reflector.getAllAndOverride as jest.Mock).mockReturnValue('payments');
+    (reflector.getAllAndOverride as jest.Mock).mockReturnValue('installation');
 
     const admin = { ...baseUser, role: 'super_admin' };
     await expect(guard.canActivate(contextFor(admin))).resolves.toBe(true);
@@ -137,7 +137,7 @@ describe('FeatureGuard canActivate', () => {
 
   it('throws ForbiddenException when a non-baseline feature is not granted', async () => {
     const { guard, reflector } = makeGuard([]);
-    (reflector.getAllAndOverride as jest.Mock).mockReturnValue('payments');
+    (reflector.getAllAndOverride as jest.Mock).mockReturnValue('installation');
 
     await expect(guard.canActivate(contextFor(baseUser))).rejects.toBeInstanceOf(
       ForbiddenException,
@@ -146,7 +146,7 @@ describe('FeatureGuard canActivate', () => {
 
   it('does NOT bypass feature locks while impersonating a non-super-admin', async () => {
     const { guard, reflector } = makeGuard([]);
-    (reflector.getAllAndOverride as jest.Mock).mockReturnValue('payments');
+    (reflector.getAllAndOverride as jest.Mock).mockReturnValue('installation');
 
     const impersonating = {
       ...baseUser,
