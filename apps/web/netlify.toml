@@ -1,0 +1,4 @@
+# The default Node.js heap on the build image is too small for `tsc && vite build`
+# (type-checking plus the PWA/Workbox bundle), which crashed with "JavaScript heap out of memory".
+[build.environment]
+  NODE_OPTIONS = "--max-old-space-size=4096"
