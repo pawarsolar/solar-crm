@@ -1,3 +1,5 @@
+# Netlify Configuration within apps/web
+
 [build]
   publish = "dist"
   command = "npm run build"
@@ -7,7 +9,46 @@
   SECRETS_SCAN_ENABLED = "false"
   SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT,NODE_OPTIONS,VITE_API_URL,CORS_ORIGIN,REVIEW_ID"
 
+[context.production]
+  publish = "dist"
+  command = "npm run build"
+  [context.production.environment]
+    NODE_ENV = "production"
+
+# Netlify Deploy Previews for Pull Requests
+[context.deploy-preview]
+  publish = "dist"
+  command = "npm run build"
+  [context.deploy-preview.environment]
+    NODE_ENV = "production"
+    VITE_DEPLOY_ENV = "preview"
+    SECRETS_SCAN_ENABLED = "false"
+    SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT,NODE_OPTIONS,VITE_API_URL,CORS_ORIGIN,REVIEW_ID"
+
+# Branch Deployments for testing feature branches
+[context.branch-deploy]
+  publish = "dist"
+  command = "npm run build"
+  [context.branch-deploy.environment]
+    NODE_ENV = "production"
+    VITE_DEPLOY_ENV = "branch"
+    SECRETS_SCAN_ENABLED = "false"
+    SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT,NODE_OPTIONS,VITE_API_URL,CORS_ORIGIN,REVIEW_ID"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

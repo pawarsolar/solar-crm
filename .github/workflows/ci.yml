@@ -1,0 +1,68 @@
+name: CI Quality Gate & Build Verification
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck-and-lint:
+    name: TypeScript Compilation & Static Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Type-Check API (NestJS)
+        run: npx tsc --noEmit -p apps/api/tsconfig.json
+
+      - name: Type-Check Web (React + Vite)
+        run: npx tsc --noEmit -p apps/web/tsconfig.json
+
+  test-and-build:
+    name: Unit Tests & Production Build
+    needs: typecheck-and-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Web Unit Tests (Vitest)
+        run: npm --workspace=@solar-crm/web run test
+
+      - name: Build Web Application (Vite Production Bundle)
+        run: npm --workspace=@solar-crm/web run build
+        env:
+          VITE_API_URL: '/api'
+
+      - name: Build API Application (NestJS Production Bundle)
+        run: npm --workspace=@solar-crm/api run build
+
+      - name: Verify Web Build Artifacts
+        run: |
+          test -d apps/web/dist || { echo "Web dist folder missing"; exit 1; }
+          test -f apps/web/dist/index.html || { echo "index.html missing from dist"; exit 1; }
+          echo "Web build artifacts verified successfully."
