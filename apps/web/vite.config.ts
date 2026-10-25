@@ -65,14 +65,75 @@ export default defineConfig({
     target: 'esnext',
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-query': ['@tanstack/react-query'],
-          'vendor-charts': ['recharts'],
-          'vendor-icons': ['lucide-react'],
+        manualChunks(id) {
+          const normalizedId = id.replace(/\\/g, '/');
+          if (!normalizedId.includes('node_modules')) {
+            return undefined;
+          }
+
+          // Core React & DOM runtime
+          if (
+            normalizedId.includes('/node_modules/react/') ||
+            normalizedId.includes('/node_modules/react-dom/') ||
+            normalizedId.includes('/node_modules/scheduler/')
+          ) {
+            return 'vendor-react';
+          }
+
+          // React Router SPA navigation
+          if (
+            normalizedId.includes('/node_modules/react-router/') ||
+            normalizedId.includes('/node_modules/react-router-dom/') ||
+            normalizedId.includes('/node_modules/@remix-run/router/')
+          ) {
+            return 'vendor-router';
+          }
+
+          // TanStack React Query cache engine
+          if (normalizedId.includes('/node_modules/@tanstack/react-query')) {
+            return 'vendor-query';
+          }
+
+          // Lucide icons
+          if (normalizedId.includes('/node_modules/lucide-react/')) {
+            return 'vendor-icons';
+          }
+
+          // Charts Math & Animation Engine (D3, Victory, React-Smooth, Lodash)
+          if (
+            normalizedId.includes('/node_modules/d3-') ||
+            normalizedId.includes('/node_modules/victory-vendor/') ||
+            normalizedId.includes('/node_modules/react-smooth/') ||
+            normalizedId.includes('/node_modules/lodash/') ||
+            normalizedId.includes('/node_modules/recharts-scale/')
+          ) {
+            return 'vendor-charts-engine';
+          }
+          if (normalizedId.includes('/node_modules/recharts/')) {
+            return 'vendor-recharts';
+          }
+
+          // Form validation & schemas (Zod, React Hook Form)
+          if (
+            normalizedId.includes('/node_modules/zod/') ||
+            normalizedId.includes('/node_modules/react-hook-form/') ||
+            normalizedId.includes('/node_modules/@hookform/')
+          ) {
+            return 'vendor-forms';
+          }
+
+          // Supabase client & IndexedDB keyval cache
+          if (
+            normalizedId.includes('/node_modules/@supabase/') ||
+            normalizedId.includes('/node_modules/idb-keyval/')
+          ) {
+            return 'vendor-storage';
+          }
+
+          return undefined;
         },
       },
     },
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 300,
   },
 });

@@ -30,3 +30,19 @@ execSync('npx vite build', {
 });
 
 console.log('✅ [@solar-crm/web] Production build successfully finished.');
+
+// Mirror dist to monorepo root if running inside workspaces
+try {
+  const fs = require('fs');
+  const rootDist = path.resolve(projectRoot, '..', '..', 'dist');
+  const webDist = path.resolve(projectRoot, 'dist');
+  if (fs.existsSync(webDist)) {
+    if (fs.existsSync(rootDist)) {
+      fs.rmSync(rootDist, { recursive: true, force: true });
+    }
+    fs.cpSync(webDist, rootDist, { recursive: true });
+    console.log('📦 [@solar-crm/web] Mirrored dist artifacts to root /dist.');
+  }
+} catch (mirrorErr) {
+  // Ignore in isolated environments
+}

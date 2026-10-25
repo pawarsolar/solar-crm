@@ -66,3 +66,6 @@ jobs:
           test -d apps/web/dist || { echo "Web dist folder missing"; exit 1; }
           test -f apps/web/dist/index.html || { echo "index.html missing from dist"; exit 1; }
           echo "Web build artifacts verified successfully."
+
+      - name: Audit Bundle Size & Enforce 300kB Asset Budget
+        run: node apps/web/scripts/check-bundle-size.cjs
