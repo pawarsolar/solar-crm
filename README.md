@@ -78,18 +78,6 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
-## 4. Test User Credentials (1-Click Switcher Available on Login)
-
-| Role | Email | Password | Scope |
-|---|---|---|---|
-| **Super Admin** | `admin@kyrossolar.com` | `KyrosPass@123` | Full enterprise control & feature matrix |
-| **Sales Admin** | `sales.lead@kyrossolar.com` | `KyrosPass@123` | Pipeline assignment & deletion approvals |
-| **Telecaller** | `telecaller1@kyrossolar.com` | `KyrosPass@123` | Daily follow-up queue & lead capture |
-| **Sales Exec** | `exec1@kyrossolar.com` | `KyrosPass@123` | Proposal generation, quotes & payments |
-| **Field Surveyor** | `surveyor1@kyrossolar.com` | `KyrosPass@123` | Technical roof & shadow surveys |
-
----
-
 ## 5. Project Structure & Documentation
 
 Detailed engineering documentation is maintained in `/docs`:
