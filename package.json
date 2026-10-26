@@ -7,11 +7,14 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "node scripts/build-netlify.cjs",
+    "build": "npm run build:api && node scripts/build-netlify.cjs",
+    "start": "node --max-old-space-size=400 apps/api/dist/main",
     "dev:api": "npm --workspace=apps/api run start:dev",
     "dev:web": "npm --workspace=apps/web run dev",
     "build:api": "npm --workspace=apps/api run build",
     "build:web": "node scripts/build-netlify.cjs",
+    "start:api": "node --max-old-space-size=400 apps/api/dist/main",
+    "start:prod": "node --max-old-space-size=400 apps/api/dist/main",
     "lint": "npm --workspaces run lint",
     "test": "npm --workspaces run test",
     "seed": "npm --workspace=apps/api run seed",

@@ -101,4 +101,25 @@ If the API fails to start because a previous Node.js instance didn't release por
 ```powershell
 Stop-Process -Id (Get-NetTCPConnection -LocalPort 3002).OwningProcess -Force
 ```
-# solar-crm
+
+---
+
+## 7. Render Deployment (Backend API)
+
+When hosting the NestJS API on [Render](https://render.com):
+1. **Option A (Blueprint)**: Create a new service via **Blueprints** pointing to `render.yaml`.
+2. **Option B (Web Service)**: Create a new **Web Service**:
+   - **Environment**: `Node`
+   - **Build Command**: `npm install && npm run build:api` (or `npm install && npm run build`)
+   - **Start Command**: `node --max-old-space-size=400 apps/api/dist/main` (or `npm start`)
+   - **Health Check Path**: `/api/health`
+   - **Environment Variables**:
+     - `NODE_ENV`: `production`
+     - `NODE_OPTIONS`: `--max-old-space-size=400`
+     - `ENABLE_DEMO_AUTH`: `true`
+     - `CORS_ORIGIN`: `https://pawarsolar-crm.netlify.app,http://localhost:5173`
+     - `SUPABASE_URL`: `https://xkbititevicweaadwcio.supabase.co`
+     - `SUPABASE_ANON_KEY`: `<your_anon_key>`
+     - `SUPABASE_SERVICE_ROLE_KEY`: `<your_service_role_key>`
+     - `JWT_SECRET`: `<random_secure_string>`
+

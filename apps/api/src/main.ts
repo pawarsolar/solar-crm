@@ -62,8 +62,8 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
-  logger.log(`Solar EPC CRM API running on port ${port} with memory budget < 256MB`);
+  await app.listen(port, '0.0.0.0');
+  logger.log(`Solar EPC CRM API running on port ${port} on 0.0.0.0 with memory budget < 400MB`);
 }
 
 bootstrap();
