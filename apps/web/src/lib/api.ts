@@ -32,11 +32,21 @@ export async function apiRequest<T = any>(
     } as any;
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    method,
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      method,
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (err: any) {
+    if (err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('fetch'))) {
+      throw new Error(
+        `Unable to reach backend API at ${API_BASE}. Please ensure the NestJS backend is running (npm run dev:api).`,
+      );
+    }
+    throw err;
+  }
 
   if (!res.ok) {
     let errorMsg = 'An error occurred';

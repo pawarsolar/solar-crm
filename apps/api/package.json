@@ -4,6 +4,7 @@
   "description": "Solar EPC CRM Backend API (NestJS + Supabase)",
   "private": true,
   "scripts": {
+    "dev": "nest start --watch",
     "build": "nest build",
     "start": "node --max-old-space-size=256 dist/main",
     "start:dev": "nest start --watch",
