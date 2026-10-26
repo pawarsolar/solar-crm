@@ -1,8 +1,10 @@
 # Netlify Configuration within apps/web
+# Monorepo setup targeting apps/web for static SPA deployment
 
 [build]
-  publish = "dist"
+  base = "apps/web"
   command = "npm run build"
+  publish = "apps/web/dist"
 
 [build.environment]
   NODE_VERSION = "20"
@@ -11,7 +13,7 @@
   SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT,NODE_OPTIONS,VITE_API_URL,CORS_ORIGIN,REVIEW_ID"
 
 [context.production]
-  publish = "dist"
+  publish = "apps/web/dist"
   command = "npm run build"
   [context.production.environment]
     NODE_ENV = "production"
@@ -19,7 +21,7 @@
 
 # Netlify Deploy Previews for Pull Requests
 [context.deploy-preview]
-  publish = "dist"
+  publish = "apps/web/dist"
   command = "npm run build"
   [context.deploy-preview.environment]
     NODE_ENV = "production"
@@ -30,7 +32,7 @@
 
 # Branch Deployments for testing feature branches
 [context.branch-deploy]
-  publish = "dist"
+  publish = "apps/web/dist"
   command = "npm run build"
   [context.branch-deploy.environment]
     NODE_ENV = "production"

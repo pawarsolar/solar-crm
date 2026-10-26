@@ -34,16 +34,24 @@ if (!fs.existsSync(webDistDir) || !fs.existsSync(path.join(webDistDir, 'index.ht
   process.exit(1);
 }
 
-// Copy apps/web/dist to root /dist for Netlify
-console.log('📦 [Netlify Build] Synchronizing build artifacts to root /dist for Netlify publish...');
+// Copy apps/web/dist to root /dist and nested paths for Netlify publish
+console.log('📦 [Netlify Build] Synchronizing build artifacts for Netlify publish...');
 try {
   if (fs.existsSync(rootDistDir)) {
     fs.rmSync(rootDistDir, { recursive: true, force: true });
   }
   fs.cpSync(webDistDir, rootDistDir, { recursive: true });
-  console.log('✅ [Netlify Build] Copied dist to root /dist successfully.');
+
+  const nestedWebDistDir = path.join(webDir, 'apps', 'web', 'dist');
+  if (fs.existsSync(nestedWebDistDir)) {
+    fs.rmSync(nestedWebDistDir, { recursive: true, force: true });
+  }
+  fs.mkdirSync(path.dirname(nestedWebDistDir), { recursive: true });
+  fs.cpSync(webDistDir, nestedWebDistDir, { recursive: true });
+
+  console.log('✅ [Netlify Build] Copied dist to root /dist and nested paths successfully.');
 } catch (copyErr) {
-  console.warn('⚠️ [Netlify Build] Warning syncing to root /dist:', copyErr.message);
+  console.warn('⚠️ [Netlify Build] Warning syncing dist:', copyErr.message);
 }
 
 // Run bundle size audit

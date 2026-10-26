@@ -31,17 +31,28 @@ execSync('npx vite build', {
 
 console.log('✅ [@solar-crm/web] Production build successfully finished.');
 
-// Mirror dist to monorepo root if running inside workspaces
+// Mirror dist to monorepo root and nested paths for flexible Netlify publish resolution
 try {
   const fs = require('fs');
   const rootDist = path.resolve(projectRoot, '..', '..', 'dist');
   const webDist = path.resolve(projectRoot, 'dist');
+  const nestedWebDist = path.resolve(projectRoot, 'apps', 'web', 'dist');
+
   if (fs.existsSync(webDist)) {
+    // 1. Mirror to monorepo root /dist
     if (fs.existsSync(rootDist)) {
       fs.rmSync(rootDist, { recursive: true, force: true });
     }
     fs.cpSync(webDist, rootDist, { recursive: true });
     console.log('📦 [@solar-crm/web] Mirrored dist artifacts to root /dist.');
+
+    // 2. Mirror to apps/web/apps/web/dist for nested resolution
+    if (fs.existsSync(nestedWebDist)) {
+      fs.rmSync(nestedWebDist, { recursive: true, force: true });
+    }
+    fs.mkdirSync(path.dirname(nestedWebDist), { recursive: true });
+    fs.cpSync(webDist, nestedWebDist, { recursive: true });
+    console.log('📦 [@solar-crm/web] Mirrored dist artifacts to apps/web/apps/web/dist.');
   }
 } catch (mirrorErr) {
   // Ignore in isolated environments
