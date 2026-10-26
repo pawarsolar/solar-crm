@@ -64,6 +64,14 @@ export async function apiRequest<T = any>(
   if (contentType && contentType.includes('application/json')) {
     return res.json();
   }
+
+  // Guard against Netlify SPA fallback returning index.html for API routes
+  if (contentType && contentType.includes('text/html')) {
+    throw new Error(
+      `Endpoint ${endpoint} returned HTML instead of JSON. Ensure the backend API is deployed on Render and VITE_API_URL is configured.`,
+    );
+  }
+
   return res as any;
 }
 

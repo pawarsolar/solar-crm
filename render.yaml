@@ -1,0 +1,39 @@
+# ==============================================================================
+# Render Blueprint Specification — Kyros Solar EPC CRM Backend API
+# ==============================================================================
+# Deploy to Render via Dashboard -> New -> Blueprint -> Select this repository.
+# Documentation: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: solar-crm-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: .
+    buildCommand: npm install && npm --workspace=apps/api run build
+    startCommand: node --max-old-space-size=256 apps/api/dist/main
+    healthCheckPath: /api/subsidy/config
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        value: https://xkbititevicweaadwcio.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: sb_publishable_ajqBPdG2mlCB62BCLa8hhQ_WopgsL3A
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        value: https://pawarsolar-crm.netlify.app,http://localhost:5173
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REPORT_SHARE_SALT
+        generateValue: true
+      - key: ENABLE_DEMO_AUTH
+        value: "true"
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=256
