@@ -15,15 +15,29 @@ const buildEnv = {
   NODE_OPTIONS: '--max-old-space-size=4096'
 };
 
+// Resolve compilers from locally installed devDependencies. Using `npx tsc` would
+// silently download the unrelated `tsc` package from npm if TypeScript is missing.
+function resolveBin(pkg, binPath) {
+  try {
+    const pkgJson = require.resolve(`${pkg}/package.json`, { paths: [projectRoot] });
+    return path.join(path.dirname(pkgJson), binPath);
+  } catch (err) {
+    console.error(`❌ [@solar-crm/web] Could not find "${pkg}". Make sure devDependencies are installed (NODE_ENV must not be "production" during install).`);
+    process.exit(1);
+  }
+}
+const tscBin = resolveBin('typescript', 'bin/tsc');
+const viteBin = resolveBin('vite', 'bin/vite.js');
+
 console.log('⚡ [@solar-crm/web] Running TypeScript typecheck (heap limit: 4096MB)...');
-execSync('npx tsc', {
+execSync(`"${process.execPath}" "${tscBin}"`, {
   cwd: projectRoot,
   stdio: 'inherit',
   env: buildEnv
 });
 
 console.log('⚡ [@solar-crm/web] Building production bundle with Vite...');
-execSync('npx vite build', {
+execSync(`"${process.execPath}" "${viteBin}" build`, {
   cwd: projectRoot,
   stdio: 'inherit',
   env: buildEnv
