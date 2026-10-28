@@ -38,13 +38,12 @@
     SECRETS_SCAN_ENABLED = "false"
     SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT,NODE_OPTIONS,VITE_API_URL,CORS_ORIGIN,REVIEW_ID"
 
-# Optional API Proxy: Route /api requests to external hosted NestJS backend on Render
-# If VITE_API_URL is omitted or set to '/api', configure this proxy to prevent HTML responses on API routes:
-# [[redirects]]
-#   from = "/api/*"
-#   to = "https://solar-crm-api.onrender.com/api/:splat"
-#   status = 200
-#   force = true
+# API Proxy: Route /api requests to hosted NestJS backend on Render
+[[redirects]]
+  from = "/api/*"
+  to = "https://solar-crm-api.onrender.com/api/:splat"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/*"
