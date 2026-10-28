@@ -2,9 +2,8 @@
 # Monorepo setup targeting apps/web for static SPA deployment
 
 [build]
-  base = "apps/web"
   command = "npm run build"
-  publish = "apps/web/dist"
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
@@ -13,14 +12,14 @@
   SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT,NODE_OPTIONS,VITE_API_URL,CORS_ORIGIN,REVIEW_ID"
 
 [context.production]
-  publish = "apps/web/dist"
+  publish = "dist"
   command = "npm run build"
   [context.production.environment]
     NODE_OPTIONS = "--max-old-space-size=4096"
 
 # Netlify Deploy Previews for Pull Requests
 [context.deploy-preview]
-  publish = "apps/web/dist"
+  publish = "dist"
   command = "npm run build"
   [context.deploy-preview.environment]
     NODE_OPTIONS = "--max-old-space-size=4096"
@@ -30,7 +29,7 @@
 
 # Branch Deployments for testing feature branches
 [context.branch-deploy]
-  publish = "apps/web/dist"
+  publish = "dist"
   command = "npm run build"
   [context.branch-deploy.environment]
     NODE_OPTIONS = "--max-old-space-size=4096"
