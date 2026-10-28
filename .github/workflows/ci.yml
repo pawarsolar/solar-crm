@@ -69,3 +69,6 @@ jobs:
 
       - name: Audit Bundle Size & Enforce 300kB Asset Budget
         run: node apps/web/scripts/check-bundle-size.cjs
+
+      - name: Verify Root Monorepo Orchestrated Build
+        run: npm run build

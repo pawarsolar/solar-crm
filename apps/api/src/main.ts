@@ -15,6 +15,10 @@ async function bootstrap() {
 
   const logger = new Logger('Bootstrap');
 
+  // Enable reverse proxy trust (for Render, Cloudflare, custom domain SSL termination)
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', 1);
+
   // Security Headers
   app.use(helmet());
 
@@ -33,6 +37,9 @@ async function bootstrap() {
         allowedOrigins.includes(origin) ||
         allowedOrigins.includes('*') ||
         /\.netlify\.app$/.test(origin) ||
+        /\.onrender\.com$/.test(origin) ||
+        /(^|\.)pawarsolar\.com$/.test(origin) ||
+        /(^|\.)kyrossolar\.com$/.test(origin) ||
         /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
       ) {
         callback(null, true);
@@ -43,6 +50,7 @@ async function bootstrap() {
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    maxAge: 86400,
   });
 
   // Global Prefix

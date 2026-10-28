@@ -1,0 +1,33 @@
+name: Render Backend Keep-Alive Ping
+
+on:
+  schedule:
+    # Trigger every 14 minutes (Render free instances sleep after 15 minutes of inactivity)
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-alive-ping
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    name: Keep-Alive Ping to Render API (/api/health)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Backend Health Check
+        run: |
+          TARGET_URL="${{ secrets.RENDER_API_URL || vars.RENDER_API_URL || 'https://solar-crm-api.onrender.com' }}/api/health"
+          echo "🌐 Pinging backend health endpoint: $TARGET_URL"
+          
+          # Retry up to 3 times with exponential backoff if cold-starting
+          RESPONSE=$(curl -s -S -m 60 --retry 3 --retry-delay 5 --retry-connrefused -w "\nHTTP_STATUS:%{http_code}\nTIME_TOTAL:%{time_total}s\n" "$TARGET_URL" || true)
+          
+          echo "$RESPONSE"
+          
+          if echo "$RESPONSE" | grep -q "HTTP_STATUS:200"; then
+            echo "✅ Backend API is active and healthy."
+          else
+            echo "⚠️ Non-200 or connection warning during keep-alive ping. Service may be cold-starting."
+          fi
