@@ -45,7 +45,8 @@ supabase-keys*.json
 test_proposal.pdf
 pipeline.xlsx
 pipeline.pdf
-exports/
+/exports/
+!apps/api/src/modules/exports/
 scratch/
 test-results/
 _*.txt

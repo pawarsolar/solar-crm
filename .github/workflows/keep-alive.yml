@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Ping Backend Health Check
         run: |
-          TARGET_URL="${{ secrets.RENDER_API_URL || vars.RENDER_API_URL || 'https://solar-crm-api.onrender.com' }}/api/health"
+          TARGET_URL="${{ secrets.RENDER_API_URL || vars.RENDER_API_URL || 'https://solar-crm-06uk.onrender.com' }}/api/health"
           echo "🌐 Pinging backend health endpoint: $TARGET_URL"
           
           # Retry up to 3 times with exponential backoff if cold-starting

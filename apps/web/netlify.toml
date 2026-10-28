@@ -41,7 +41,7 @@
 # API Proxy: Route /api requests to hosted NestJS backend on Render
 [[redirects]]
   from = "/api/*"
-  to = "https://solar-crm-api.onrender.com/api/:splat"
+  to = "https://solar-crm-06uk.onrender.com/api/:splat"
   status = 200
   force = true
 

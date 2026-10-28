@@ -28,10 +28,10 @@ jobs:
         run: npm ci
 
       - name: Type-Check API (NestJS)
-        run: npx tsc --noEmit -p apps/api/tsconfig.json
+        run: npm --workspace=@solar-crm/api run lint
 
       - name: Type-Check Web (React + Vite)
-        run: npx tsc --noEmit -p apps/web/tsconfig.json
+        run: npm --workspace=@solar-crm/web run lint
 
   test-and-build:
     name: Unit Tests & Production Build
