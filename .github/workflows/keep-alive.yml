@@ -2,8 +2,8 @@ name: Render Backend Keep-Alive Ping
 
 on:
   schedule:
-    # Trigger every 14 minutes (Render free instances sleep after 15 minutes of inactivity)
-    - cron: '*/14 * * * *'
+    # Trigger every 10 minutes (Render free instances sleep after 15 minutes of inactivity)
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 concurrency:
