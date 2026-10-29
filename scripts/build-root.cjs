@@ -18,14 +18,18 @@ const isNetlify = process.env.NETLIFY === 'true' || process.env.NETLIFY === '1';
 console.log('🏗️  [Build Orchestrator] Starting monorepo build...');
 console.log(`ℹ️  Environment: ${isRender ? 'Render' : isNetlify ? 'Netlify' : 'Local / CI'}`);
 
-const exec = (cmd, cwd = rootDir) => {
+const defaultNodeOptions = isRender 
+  ? '--max-old-space-size=350' 
+  : '--max-old-space-size=4096';
+
+const exec = (cmd, cwd = rootDir, customNodeOptions = defaultNodeOptions) => {
   console.log(`⚡ Executing: ${cmd} (cwd: ${cwd})`);
   execSync(cmd, {
     cwd,
     stdio: 'inherit',
     env: {
       ...process.env,
-      NODE_OPTIONS: process.env.NODE_OPTIONS || '--max-old-space-size=4096',
+      NODE_OPTIONS: customNodeOptions,
     },
   });
 };
