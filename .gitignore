@@ -24,6 +24,8 @@ out/
 .env.production
 .env.production.local
 !**/.env.example
+!**/.env.local.example
+!**/.env.production.example
 
 # Credentials, tokens, keys & secrets
 credentials*
