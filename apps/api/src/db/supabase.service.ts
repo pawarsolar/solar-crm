@@ -1,11 +1,12 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Pool, PoolClient } from 'pg';
-import WebSocket from 'ws';
+const wsModule = require('ws');
+const ResolvedWebSocket = wsModule.default || wsModule;
 
 // Ensure globalThis.WebSocket is available in Node.js 20 LTS environments
-if (typeof globalThis.WebSocket === 'undefined') {
-  (globalThis as any).WebSocket = WebSocket;
+if (typeof globalThis.WebSocket === 'undefined' || !globalThis.WebSocket) {
+  (globalThis as any).WebSocket = ResolvedWebSocket;
 }
 
 /** Minimal shape of the authenticated caller needed to pin a tenant session. */
@@ -51,7 +52,7 @@ export class SupabaseService implements OnModuleInit, OnModuleDestroy {
     this.client = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
       realtime: {
-        transport: WebSocket as any,
+        transport: ResolvedWebSocket as any,
       },
       global: {
         // Fail fast when the project is unreachable instead of hanging the request.

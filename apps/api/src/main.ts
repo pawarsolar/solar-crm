@@ -2,9 +2,10 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 // Polyfill WebSocket for Node.js < 22 environments (e.g. Node 20 LTS on Render)
-import WebSocket from 'ws';
-if (typeof globalThis.WebSocket === 'undefined') {
-  (globalThis as any).WebSocket = WebSocket;
+const wsModule = require('ws');
+const ResolvedWebSocket = wsModule.default || wsModule;
+if (typeof globalThis.WebSocket === 'undefined' || !globalThis.WebSocket) {
+  (globalThis as any).WebSocket = ResolvedWebSocket;
 }
 
 import { NestFactory } from '@nestjs/core';

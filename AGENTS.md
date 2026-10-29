@@ -1,3 +1,4 @@
+
 # AGENTS.md — Rules & Guidelines for AI Assistants
 
 This repository contains **Solar EPC CRM**, a production-grade enterprise monorepo combining a NestJS backend (`apps/api`) and a React/Vite PWA frontend (`apps/web`).
