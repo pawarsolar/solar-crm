@@ -19,6 +19,13 @@ import { RequireFeature } from '../../common/decorators/require-feature.decorato
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
+interface UploadedMulterFile {
+  buffer: Buffer;
+  originalname: string;
+  mimetype?: string;
+  size?: number;
+}
+
 @Controller('leads/import')
 export class ImportController {
   constructor(private readonly importService: ImportService) {}
@@ -33,7 +40,7 @@ export class ImportController {
       limits: { fileSize: 10 * 1024 * 1024, files: 1 },
     }),
   )
-  async preview(@UploadedFile() file: Express.Multer.File) {
+  async preview(@UploadedFile() file: UploadedMulterFile) {
     if (!file) {
       throw new BadRequestException('A spreadsheet file (.xlsx or .csv) is required');
     }

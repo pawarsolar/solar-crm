@@ -27,7 +27,8 @@ export class DashboardService {
       let pipelineValue = 0;
       let quotesCount = 0;
 
-      funnel.forEach((row: any) => {
+      const funnelRows = Array.isArray(funnel) ? (funnel as any[]) : [];
+      funnelRows.forEach((row: any) => {
         const count = Number(row.lead_count || 0);
         totalLeads += count;
         pipelineValue += Number(row.total_value || 0);
