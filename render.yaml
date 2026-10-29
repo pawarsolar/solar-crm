@@ -28,7 +28,7 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: CORS_ORIGIN
-        value: https://pawarsolar-crm.netlify.app,https://pawarsolar.com,https://crm.pawarsolar.com,https://api.kyrossolar.com,http://localhost:5173
+        value: https://kyroscrm.netlify.app,https://pawarsolar-crm.netlify.app,https://pawarsolar.com,https://crm.pawarsolar.com,https://api.kyrossolar.com,http://localhost:5173
       - key: JWT_SECRET
         generateValue: true
       - key: REPORT_SHARE_SALT

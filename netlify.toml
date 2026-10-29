@@ -9,6 +9,7 @@
 [build.environment]
   NODE_VERSION = "20"
   NODE_OPTIONS = "--max-old-space-size=4096"
+  VITE_API_URL = "/api"
   SECRETS_SCAN_ENABLED = "false"
   SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT,NODE_OPTIONS,VITE_API_URL,CORS_ORIGIN,REVIEW_ID"
 
@@ -18,6 +19,7 @@
   command = "npm run build"
   [context.production.environment]
     NODE_OPTIONS = "--max-old-space-size=4096"
+    VITE_API_URL = "/api"
 
 # Netlify Deploy Previews for Pull Requests
 # Every Pull Request automatically generates a unique isolated preview URL

@@ -1,6 +1,28 @@
 import { enqueueOfflineAction, flushOfflineQueue } from './offline-sync';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+function getApiBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  // If running in browser and NOT on localhost/127.0.0.1:
+  if (typeof window !== 'undefined') {
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '[::1]';
+
+    // When running on a deployed website (e.g. kyroscrm.netlify.app, custom domain):
+    if (!isLocalhost) {
+      // If VITE_API_URL is missing or incorrectly points to localhost, fall back to '/api'
+      if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
+        return '/api';
+      }
+      return envUrl;
+    }
+  }
+
+  return envUrl || '/api';
+}
+
+const API_BASE = getApiBaseUrl();
 
 export async function apiRequest<T = any>(
   endpoint: string,
@@ -41,9 +63,13 @@ export async function apiRequest<T = any>(
     });
   } catch (err: any) {
     if (err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('fetch'))) {
-      throw new Error(
-        `Unable to reach backend API at ${API_BASE}. Please ensure the NestJS backend is running (npm run dev:api).`,
-      );
+      const isLocalhost =
+        typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      const hint = isLocalhost
+        ? 'Please ensure the NestJS backend is running locally (npm run dev:api).'
+        : 'Please ensure the Render backend is operational or check network connection.';
+      throw new Error(`Unable to reach backend API at ${API_BASE}. ${hint}`);
     }
     throw err;
   }
