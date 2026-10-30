@@ -15,7 +15,22 @@ export const SchemaHealthBanner: React.FC = () => {
   const { user } = useAuth();
   const [health, setHealth] = useState<SchemaHealthData | null>(null);
   const [checking, setChecking] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('schema_health_dismissed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    try {
+      sessionStorage.setItem('schema_health_dismissed', 'true');
+    } catch {
+      // Ignore
+    }
+  };
 
   const isAdmin = user?.role === 'super_admin' || user?.role === 'sales_admin';
 
@@ -82,7 +97,7 @@ export const SchemaHealthBanner: React.FC = () => {
             <span>{checking ? 'Checking...' : 'Re-check'}</span>
           </button>
           <button
-            onClick={() => setDismissed(true)}
+            onClick={handleDismiss}
             className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
             title="Dismiss notification"
           >
