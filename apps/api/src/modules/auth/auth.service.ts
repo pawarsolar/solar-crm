@@ -112,7 +112,7 @@ export class AuthService {
   private demoAuthEnabled(): boolean {
     return (
       process.env.ENABLE_DEMO_AUTH === 'true' &&
-      process.env.NODE_ENV !== 'production'
+      (process.env.NODE_ENV !== 'production' || process.env.RENDER === 'true' || process.env.ALLOW_DEMO_IN_PROD === 'true')
     );
   }
 
