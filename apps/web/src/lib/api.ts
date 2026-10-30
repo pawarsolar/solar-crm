@@ -11,7 +11,7 @@ function getApiBaseUrl(): string {
 
     // When running on a deployed website (e.g. kyroscrm.netlify.app, custom domain):
     if (!isLocalhost) {
-      // If VITE_API_URL is missing or incorrectly points to localhost, fall back to '/api'
+      // If VITE_API_URL is missing or points to localhost, fall back to '/api' (Netlify CDN proxy)
       if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
         return '/api';
       }
@@ -19,7 +19,7 @@ function getApiBaseUrl(): string {
     }
   }
 
-  return envUrl || '/api';
+  return envUrl || 'https://solar-crm-06uk.onrender.com/api';
 }
 
 const API_BASE = getApiBaseUrl();

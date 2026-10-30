@@ -15,10 +15,12 @@ jobs:
     name: Keep-Alive Ping to Render API (/api/health)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      RENDER_BASE_URL: https://solar-crm-06uk.onrender.com
     steps:
       - name: Ping Backend Health Check
         run: |
-          TARGET_URL="${{ secrets.RENDER_API_URL || vars.RENDER_API_URL || 'https://solar-crm-06uk.onrender.com' }}/api/health"
+          TARGET_URL="${RENDER_BASE_URL}/api/health"
           echo "🌐 Pinging backend health endpoint: $TARGET_URL"
           
           # Retry up to 3 times with exponential backoff if cold-starting

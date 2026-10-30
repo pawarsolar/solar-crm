@@ -56,8 +56,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3002',
+        target: process.env.VITE_BACKEND_URL || 'https://solar-crm-06uk.onrender.com',
         changeOrigin: true,
+        secure: false,
       },
     },
   },
