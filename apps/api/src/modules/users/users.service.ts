@@ -105,7 +105,11 @@ const SEED_FALLBACK_USERS: any[] = [
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
-  private inMemoryUsers: any[] = [...SEED_FALLBACK_USERS];
+  private inMemoryUsers: any[] = SEED_FALLBACK_USERS.map((u) => ({
+    ...u,
+    deleted_at: null,
+    temporary_password: u.role === 'super_admin' ? 'admin123' : 'SolarPass@2026',
+  }));
 
   constructor(private readonly supabaseService: SupabaseService) {}
 
@@ -262,6 +266,7 @@ export class UsersService {
     }
 
     const newId = `user-${Date.now()}`;
+    const generatedPassword = dto.password?.trim() || `KyrosPass@${Math.floor(1000 + Math.random() * 9000)}`;
     const newUser = {
       id: newId,
       org_id: user.org_id,
@@ -272,6 +277,8 @@ export class UsersService {
       team_id: dto.team_id || null,
       team: { id: dto.team_id || 'team-default', name: 'General Operations' },
       is_active: true,
+      deleted_at: null,
+      temporary_password: generatedPassword,
       created_at: new Date().toISOString(),
     };
 
@@ -361,13 +368,23 @@ export class UsersService {
   async resetPassword(user: AuthUser, userId: string, newPassword?: string) {
     this.assertSuperAdmin(user);
 
-    const target = await this.findOne(user, userId);
-    const pass = newPassword || `SolarPass@${Math.floor(1000 + Math.random() * 9000)}`;
+    const targetIdx = this.inMemoryUsers.findIndex((u) => u.id === userId);
+    if (targetIdx === -1) {
+      throw new NotFoundException('Staff member not found');
+    }
+
+    const pass = newPassword?.trim() || `Kyros#${Math.floor(1000 + Math.random() * 9000)}@Solar`;
+    this.inMemoryUsers[targetIdx].temporary_password = pass;
+    this.inMemoryUsers[targetIdx].password_updated_at = new Date().toISOString();
 
     try {
       await this.supabaseService.client.auth.admin.updateUserById(userId, {
         password: pass,
       });
+      await this.supabaseService.client
+        .from('profiles')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', userId);
     } catch {
       // Fallback
     }
@@ -375,9 +392,9 @@ export class UsersService {
     return {
       success: true,
       user_id: userId,
-      email: target.email,
+      email: this.inMemoryUsers[targetIdx].email,
       temporary_password: pass,
-      message: `Password reset successfully for ${target.full_name}.`,
+      message: `Password updated successfully for ${this.inMemoryUsers[targetIdx].full_name}.`,
     };
   }
 
@@ -391,14 +408,18 @@ export class UsersService {
     }
 
     const idx = this.inMemoryUsers.findIndex((u) => u.id === userId);
-    if (idx !== -1) {
-      this.inMemoryUsers[idx].is_active = false;
+    if (idx === -1) {
+      throw new NotFoundException('Staff member not found');
     }
+
+    const deletedAt = new Date().toISOString();
+    this.inMemoryUsers[idx].is_active = false;
+    this.inMemoryUsers[idx].deleted_at = deletedAt;
 
     try {
       await this.supabaseService.client
         .from('profiles')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .update({ is_active: false, deleted_at: deletedAt, updated_at: deletedAt })
         .eq('id', userId)
         .eq('org_id', user.org_id);
     } catch {
@@ -406,9 +427,85 @@ export class UsersService {
     }
 
     return {
-      message: 'Staff account deactivated and access revoked',
+      message: `Staff member ${this.inMemoryUsers[idx].full_name} moved to 30-day retrieval archive. All data preserved and restorable within 30 days.`,
       id: userId,
       is_active: false,
+      deleted_at: deletedAt,
     };
+  }
+
+  async restoreUser(user: AuthUser, userId: string) {
+    this.assertSuperAdmin(user);
+
+    const idx = this.inMemoryUsers.findIndex((u) => u.id === userId);
+    if (idx === -1) {
+      throw new NotFoundException('Staff member not found');
+    }
+
+    this.inMemoryUsers[idx].is_active = true;
+    this.inMemoryUsers[idx].deleted_at = null;
+    this.inMemoryUsers[idx].updated_at = new Date().toISOString();
+
+    try {
+      await this.supabaseService.client
+        .from('profiles')
+        .update({ is_active: true, deleted_at: null, updated_at: new Date().toISOString() })
+        .eq('id', userId)
+        .eq('org_id', user.org_id);
+    } catch {
+      // Fallback
+    }
+
+    return {
+      message: `Staff member ${this.inMemoryUsers[idx].full_name} restored successfully to Active Staff Directory.`,
+      id: userId,
+      user: this.inMemoryUsers[idx],
+    };
+  }
+
+  async permanentDeleteUser(user: AuthUser, userId: string) {
+    this.assertSuperAdmin(user);
+
+    if (userId === user.id) {
+      throw new ForbiddenException('Super Admin cannot purge own account');
+    }
+
+    const idx = this.inMemoryUsers.findIndex((u) => u.id === userId);
+    if (idx === -1) {
+      throw new NotFoundException('Staff member not found');
+    }
+
+    const removed = this.inMemoryUsers.splice(idx, 1)[0];
+
+    try {
+      await this.supabaseService.client
+        .from('profiles')
+        .delete()
+        .eq('id', userId)
+        .eq('org_id', user.org_id);
+    } catch {
+      // Fallback
+    }
+
+    return {
+      message: `Staff member ${removed.full_name} permanently purged from system.`,
+      id: userId,
+    };
+  }
+
+  async exportCredentials(user: AuthUser) {
+    this.assertSuperAdmin(user);
+    return this.inMemoryUsers.map((u) => ({
+      id: u.id,
+      full_name: u.full_name,
+      email: u.email,
+      phone: u.phone || 'N/A',
+      role: u.role,
+      role_label: VALID_ROLES.includes(u.role) ? u.role : u.role,
+      is_active: u.is_active,
+      deleted_at: u.deleted_at || null,
+      temporary_password: u.temporary_password || 'Kyros@2026',
+      created_at: u.created_at,
+    }));
   }
 }

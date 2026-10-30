@@ -30,6 +30,12 @@ import {
   AlertCircle,
   HelpCircle,
   CheckCircle2,
+  Download,
+  Eye,
+  EyeOff,
+  Copy,
+  Archive,
+  Calendar,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -129,6 +135,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
   const [resetPasswordUser, setResetPasswordUser] = useState<any | null>(null);
   const [customPassword, setCustomPassword] = useState('');
   const [resetResult, setResetResult] = useState<any | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedText, setCopiedText] = useState(false);
+
+  // Staff sub-tab: Active vs 30-Day Data Retrieval Archive
+  const [staffSubTab, setStaffSubTab] = useState<'active' | 'archive'>('active');
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<any | null>(null);
 
   // Feature matrix local (unsaved) edits, keyed `role|feature`
   const [pendingGrants, setPendingGrants] = useState<Record<string, boolean>>({});
@@ -220,10 +232,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
     enabled: isSuperAdmin && activeTab === 'security',
   });
 
-  // Filtered users list
+  // Filtered users list (Active vs 30-Day Retrieval Archive)
+  const activeUsers = useMemo(() => {
+    if (!usersList || !Array.isArray(usersList)) return [];
+    return usersList.filter((u: any) => !u.deleted_at);
+  }, [usersList]);
+
+  const archivedUsers = useMemo(() => {
+    if (!usersList || !Array.isArray(usersList)) return [];
+    return usersList.filter((u: any) => !!u.deleted_at);
+  }, [usersList]);
+
   const filteredUsers = useMemo(() => {
-    if (!usersList) return [];
-    let list = usersList;
+    if (!usersList || !Array.isArray(usersList)) return [];
+    const sourceList = staffSubTab === 'active' ? activeUsers : archivedUsers;
+    let list = sourceList;
     if (!isSuperAdmin) {
       list = list.filter((u: any) => u.role !== 'super_admin');
     }
@@ -236,7 +259,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
         u.role?.toLowerCase().includes(q) ||
         u.phone?.includes(q),
     );
-  }, [usersList, userSearch, isSuperAdmin]);
+  }, [usersList, staffSubTab, activeUsers, archivedUsers, userSearch, isSuperAdmin]);
 
   // Validation helpers
   const validateProvisionForm = () => {
@@ -436,12 +459,72 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
 
   const deleteUserMutation = useMutation({
     mutationFn: (id: string) => apiRequest(`/users/${id}`, { method: 'DELETE' }),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['users', 'list'] });
-      alert('Staff access revoked (account deactivated, records retained).');
+      setDeleteConfirmUser(null);
+      alert(data.message || 'Staff member moved to 30-day retrieval archive.');
     },
     onError: (err: any) => alert(err.message),
   });
+
+  const restoreUserMutation = useMutation({
+    mutationFn: (id: string) => apiRequest(`/users/${id}/restore`, { method: 'POST' }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'list'] });
+      alert(data.message || 'Staff member restored successfully.');
+    },
+    onError: (err: any) => alert(err.message),
+  });
+
+  const permanentDeleteUserMutation = useMutation({
+    mutationFn: (id: string) => apiRequest(`/users/${id}/permanent`, { method: 'DELETE' }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'list'] });
+      alert(data.message || 'Staff member permanently purged from system.');
+    },
+    onError: (err: any) => alert(err.message),
+  });
+
+  const handleDownloadCredentials = async () => {
+    try {
+      const data = await apiRequest<any[]>('/users/export/credentials');
+      if (!data || data.length === 0) {
+        alert('No user credentials available to export.');
+        return;
+      }
+      const headers = [
+        'Full Name',
+        'Username / Email',
+        'Phone',
+        'Assigned Role',
+        'Account Status',
+        'Temporary / System Password',
+        'Created At',
+        'Archived At',
+      ];
+      const rows = data.map((u) => [
+        `"${(u.full_name || '').replace(/"/g, '""')}"`,
+        `"${(u.email || '').replace(/"/g, '""')}"`,
+        `"${(u.phone || '').replace(/"/g, '""')}"`,
+        `"${(ROLE_LABELS[u.role] || u.role || '').replace(/"/g, '""')}"`,
+        `"${u.deleted_at ? 'Archived (In 30-day retrieval)' : u.is_active ? 'Active' : 'Disabled'}"`,
+        `"${(u.temporary_password || 'AdminManaged@2026').replace(/"/g, '""')}"`,
+        `"${u.created_at || ''}"`,
+        `"${u.deleted_at || 'N/A'}"`,
+      ]);
+      const csvContent =
+        'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `kyros_solar_crm_staff_credentials_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err: any) {
+      alert(`Error exporting credentials: ${err.message}`);
+    }
+  };
 
   const impersonateMutation = useMutation({
     mutationFn: (id: string) => impersonate(id),
@@ -525,13 +608,25 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
         </div>
 
         {activeTab === 'users' && isSuperAdmin && (
-          <button
-            onClick={() => setShowAddUserModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-2 hover:bg-amber-400 shadow-md shadow-amber-500/20"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Provision New Staff</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadCredentials}
+              className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-xs flex items-center gap-2 hover:bg-slate-50 shadow-sm transition-all"
+              title="Download usernames, passwords and access details for all staff members as CSV"
+            >
+              <Download className="w-4 h-4 text-amber-600" />
+              <span>Download Credentials CSV</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddUserModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-2 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition-all"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Provision New Staff</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -539,7 +634,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
       <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold overflow-x-auto">
         {(isSuperAdmin
           ? [
-              { key: 'users', label: `Staff & Role Operations (${usersList?.length || 0})`, icon: Users },
+              { key: 'users', label: `Staff & Role Operations (${activeUsers.length})`, icon: Users },
               { key: 'allocation', label: 'Bulk Lead Allocation', icon: Users },
               { key: 'features', label: `Role Feature Access Matrix (${pendingCount > 0 ? `${pendingCount} unsaved` : 'Active'})`, icon: ShieldCheck },
               { key: 'deletions', label: `Deletion Approvals (${deletionRequests?.length || 0})`, icon: Trash2 },
@@ -587,7 +682,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
               </h3>
               <p className="text-xs text-slate-500">
                 {isSuperAdmin
-                  ? 'Perform operations: Edit details, reassign roles, reset passwords, activate/disable, or child-login'
+                  ? 'Perform operations: Edit details, reassign roles, reset/generate passwords, 30-day data retrieval archive, or child-login'
                   : 'View sales representatives, telecallers, and field surveyors for lead distribution'}
               </p>
             </div>
@@ -605,12 +700,79 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
             </div>
           </div>
 
+          {/* Sub-tabs: Active Staff Directory vs 30-Day Data Retrieval Archive */}
+          {isSuperAdmin && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+              <div className="flex items-center p-1 bg-slate-100/90 rounded-2xl border border-slate-200/70 w-fit">
+                <button
+                  type="button"
+                  onClick={() => setStaffSubTab('active')}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    staffSubTab === 'active'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Active Staff</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                    {activeUsers.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStaffSubTab('archive')}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    staffSubTab === 'archive'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <Archive className="w-3.5 h-3.5 text-rose-500" />
+                  <span>30-Day Data Retrieval Archive</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      archivedUsers.length > 0
+                        ? 'bg-rose-100 text-rose-800 font-black'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {archivedUsers.length}
+                  </span>
+                </button>
+              </div>
+
+              {staffSubTab === 'archive' && (
+                <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">
+                  30-Day Data Retention Policy Active
+                </span>
+              )}
+            </div>
+          )}
+
+          {staffSubTab === 'archive' && (
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-slate-800 text-xs flex items-start gap-2.5 animate-in fade-in">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-amber-950">Enterprise 30-Day Soft-Delete & Data Retention</p>
+                <p className="text-slate-600 text-[11px] mt-0.5 leading-relaxed">
+                  Staff accounts deleted from the active directory are securely retained here for 30 days. Historic assigned leads, quotes, surveys, and audit logs remain intact. Click <strong>Restore Account</strong> to immediately reinstate full access and permissions.
+                </p>
+              </div>
+            </div>
+          )}
+
           {usersLoading ? (
             <div className="py-12 flex justify-center text-slate-400">
               <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
             </div>
           ) : filteredUsers.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-400">No staff members match your search.</div>
+            <div className="py-12 text-center text-xs text-slate-400">
+              {staffSubTab === 'active'
+                ? 'No active staff members match your search.'
+                : 'No staff members currently in the 30-day retrieval archive. All accounts are active.'}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -619,138 +781,204 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
                     <th className="py-3 px-3 font-semibold">Staff Member</th>
                     <th className="py-3 px-3 font-semibold">Contact</th>
                     <th className="py-3 px-3 font-semibold">Assigned Role</th>
-                    <th className="py-3 px-3 font-semibold">Status</th>
+                    {staffSubTab === 'active' ? (
+                      <th className="py-3 px-3 font-semibold">Status</th>
+                    ) : (
+                      <th className="py-3 px-3 font-semibold">30-Day Retention Window</th>
+                    )}
                     {isSuperAdmin && (
-                      <th className="py-3 px-3 font-semibold text-right">Super Admin Operations</th>
+                      <th className="py-3 px-3 font-semibold text-right">
+                        {staffSubTab === 'active' ? 'Super Admin Operations' : 'Recovery & Purge Operations'}
+                      </th>
                     )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredUsers.map((u: any) => (
-                    <tr key={u.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-3 px-3">
-                        <p className="font-bold text-slate-900 text-sm">{u.full_name}</p>
-                        <p className="text-[11px] text-slate-400">{u.team?.name || 'General Operations'}</p>
-                      </td>
-                      <td className="py-3 px-3 text-slate-600">
-                        <p>{u.email}</p>
-                        <p className="text-[11px] text-slate-400">{u.phone || '-'}</p>
-                      </td>
-                      <td className="py-3 px-3">
-                        {isSuperAdmin && u.id !== user?.id ? (
-                          <select
-                            value={u.role}
-                            onChange={(e) => updateRoleMutation.mutate({ id: u.id, role: e.target.value })}
-                            className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                          >
-                            {ASSIGNABLE_ROLES.map((r) => (
-                              <option key={r} value={r}>
-                                {ROLE_LABELS[r]}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 uppercase">
-                            {ROLE_LABELS[u.role] || u.role}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                            u.is_active !== false
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
-                          }`}
-                        >
-                          {u.is_active !== false ? 'Active' : 'Disabled'}
-                        </span>
-                      </td>
-                      {isSuperAdmin && (
-                        <td className="py-3 px-3 text-right">
-                          {u.id !== user?.id ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              {/* Edit details */}
-                              <button
-                                onClick={() => {
-                                  setEditUser(u);
-                                  setEditName(u.full_name);
-                                  setEditPhone(u.phone || '');
-                                  setEditRole(u.role);
-                                }}
-                                title="Edit user profile & role"
-                                className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
+                  {filteredUsers.map((u: any) => {
+                    const daysPassed = u.deleted_at
+                      ? Math.floor((Date.now() - new Date(u.deleted_at).getTime()) / (1000 * 60 * 60 * 24))
+                      : 0;
+                    const daysLeft = Math.max(0, 30 - daysPassed);
 
-                              {/* Reset Password */}
-                              <button
-                                onClick={() => {
-                                  setResetPasswordUser(u);
-                                  setCustomPassword('');
-                                  setResetResult(null);
-                                }}
-                                title="Reset staff password"
-                                className="p-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors"
-                              >
-                                <Lock className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Super Admin Provide / Revoke Feature Access Authority */}
-                              <button
-                                onClick={() => setOverrideUserId(u.id)}
-                                title="Grant / Revoke Feature Access Authority"
-                                className="px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors text-xs font-bold flex items-center gap-1.5 shadow-sm"
-                              >
-                                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                                <span>Access Authority</span>
-                              </button>
-
-                              {/* Toggle active / disabled */}
-                              <button
-                                onClick={() =>
-                                  toggleStatusMutation.mutate({
-                                    id: u.id,
-                                    is_active: u.is_active === false,
-                                  })
-                                }
-                                title={u.is_active === false ? 'Activate User' : 'Deactivate User'}
-                                className={`p-1.5 rounded-lg border transition-colors ${
-                                  u.is_active === false
-                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
-                                    : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600'
-                                }`}
-                              >
-                                {u.is_active === false ? (
-                                  <UserCheck className="w-3.5 h-3.5" />
-                                ) : (
-                                  <UserX className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-
-                              {/* Delete / revoke account */}
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Revoke all access for ${u.full_name}? Records are preserved.`)) {
-                                    deleteUserMutation.mutate(u.id);
-                                  }
-                                }}
-                                title="Revoke access"
-                                className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3 px-3">
+                          <p className="font-bold text-slate-900 text-sm">{u.full_name}</p>
+                          <p className="text-[11px] text-slate-400">{u.team?.name || 'General Operations'}</p>
+                        </td>
+                        <td className="py-3 px-3 text-slate-600">
+                          <p>{u.email}</p>
+                          <p className="text-[11px] text-slate-400">{u.phone || '-'}</p>
+                        </td>
+                        <td className="py-3 px-3">
+                          {staffSubTab === 'active' && isSuperAdmin && u.id !== user?.id ? (
+                            <select
+                              value={u.role}
+                              onChange={(e) => updateRoleMutation.mutate({ id: u.id, role: e.target.value })}
+                              className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                            >
+                              {ASSIGNABLE_ROLES.map((r) => (
+                                <option key={r} value={r}>
+                                  {ROLE_LABELS[r]}
+                                </option>
+                              ))}
+                            </select>
                           ) : (
-                            <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-                              Current Super Admin
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 uppercase">
+                              {ROLE_LABELS[u.role] || u.role}
                             </span>
                           )}
                         </td>
-                      )}
-                    </tr>
-                  ))}
+
+                        {staffSubTab === 'active' ? (
+                          <td className="py-3 px-3">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                u.is_active !== false
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}
+                            >
+                              {u.is_active !== false ? 'Active' : 'Disabled'}
+                            </span>
+                          </td>
+                        ) : (
+                          <td className="py-3 px-3">
+                            <div className="space-y-1">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                <Clock className="w-3 h-3 text-amber-600" />
+                                <span>{daysLeft} days remaining for retrieval</span>
+                              </span>
+                              <p className="text-[10px] text-slate-400">
+                                Archived on: {u.deleted_at ? new Date(u.deleted_at).toLocaleString() : 'Recent'}
+                              </p>
+                            </div>
+                          </td>
+                        )}
+
+                        {isSuperAdmin && (
+                          <td className="py-3 px-3 text-right">
+                            {staffSubTab === 'active' ? (
+                              u.id !== user?.id ? (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {/* Edit details */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditUser(u);
+                                      setEditName(u.full_name);
+                                      setEditPhone(u.phone || '');
+                                      setEditRole(u.role);
+                                    }}
+                                    title="Edit user profile & role"
+                                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Reset/Generate Password */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setResetPasswordUser(u);
+                                      setCustomPassword('');
+                                      setResetResult(null);
+                                      setShowPassword(false);
+                                    }}
+                                    title="Create custom or generate new password"
+                                    className="p-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                                  >
+                                    <KeyRound className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Super Admin Provide / Revoke Feature Access Authority */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setOverrideUserId(u.id)}
+                                    title="Grant / Revoke Feature Access Authority"
+                                    className="px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                                  >
+                                    <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Access Authority</span>
+                                  </button>
+
+                                  {/* Toggle active / disabled */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      toggleStatusMutation.mutate({
+                                        id: u.id,
+                                        is_active: u.is_active === false,
+                                      })
+                                    }
+                                    title={u.is_active === false ? 'Activate User' : 'Deactivate User'}
+                                    className={`p-1.5 rounded-lg border transition-colors ${
+                                      u.is_active === false
+                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                                        : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600'
+                                    }`}
+                                  >
+                                    {u.is_active === false ? (
+                                      <UserCheck className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <UserX className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+
+                                  {/* Move to 30-day retrieval archive */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteConfirmUser(u)}
+                                    title="Delete staff member (retained in 30-day retrieval archive)"
+                                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                                  Current Super Admin
+                                </span>
+                              )
+                            ) : (
+                              <div className="flex items-center justify-end gap-2">
+                                {/* Restore account button */}
+                                <button
+                                  type="button"
+                                  onClick={() => restoreUserMutation.mutate(u.id)}
+                                  disabled={restoreUserMutation.isPending}
+                                  className="px-3 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+                                  title="Restore staff member back to Active Staff Directory"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Restore Account</span>
+                                </button>
+
+                                {/* Permanent purge button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (
+                                      confirm(
+                                        `PERMANENTLY PURGE ${u.full_name}?\n\nThis will completely erase the staff record from the database. This action CANNOT be undone.`
+                                      )
+                                    ) {
+                                      permanentDeleteUserMutation.mutate(u.id);
+                                    }
+                                  }}
+                                  disabled={permanentDeleteUserMutation.isPending}
+                                  className="p-1.5 rounded-lg border border-rose-200 bg-white text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+                                  title="Permanently wipe staff record"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1479,49 +1707,127 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
         </div>
       )}
 
-      {/* MODAL 3: RESET STAFF PASSWORD */}
+      {/* MODAL 3: RESET / GENERATE STAFF PASSWORD */}
       {resetPasswordUser && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
-            <h3 className="font-bold text-base text-slate-900">Reset Staff Password</h3>
-            <p className="text-xs text-slate-500">
-              Set new password for <span className="font-semibold text-slate-800">{resetPasswordUser.full_name}</span> ({resetPasswordUser.email})
-            </p>
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-bold text-base text-slate-900">Manage Staff Password</h3>
+                <p className="text-xs text-slate-500">
+                  Configure login credentials for <span className="font-semibold text-slate-800">{resetPasswordUser.full_name}</span> ({resetPasswordUser.email})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setResetPasswordUser(null);
+                  setResetResult(null);
+                  setCustomPassword('');
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
 
             {resetResult ? (
-              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs space-y-2">
-                <p className="font-bold text-emerald-800">{resetResult.message}</p>
-                <div className="p-2 bg-white rounded-lg border border-emerald-200 font-mono text-emerald-950 select-all font-bold">
-                  {resetResult.temporary_password}
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs space-y-3">
+                <div className="flex items-center gap-2 text-emerald-800 font-bold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{resetResult.message}</span>
                 </div>
-                <p className="text-[11px] text-slate-500">Provide this temporary password to the staff member.</p>
+
+                <div className="p-3 bg-white rounded-xl border border-emerald-200 flex items-center justify-between gap-2 shadow-inner">
+                  <div className="font-mono text-sm text-emerald-950 font-black select-all">
+                    {resetResult.temporary_password}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(resetResult.temporary_password);
+                      setCopiedText(true);
+                      setTimeout(() => setCopiedText(false), 2000);
+                    }}
+                    className="p-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1 font-sans text-xs font-semibold"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>{copiedText ? 'Copied!' : 'Copy'}</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = `☀️ Kyros Solar EPC CRM — Staff Access Credentials\n\nName: ${resetPasswordUser.full_name}\nUsername / Email: ${resetPasswordUser.email}\nPassword: ${resetResult.temporary_password}\nRole: ${ROLE_LABELS[resetPasswordUser.role] || resetPasswordUser.role}\nPortal URL: https://solar-crm-web.onrender.com\n\nPlease log in and update your password upon first login.`;
+                    navigator.clipboard.writeText(text);
+                    setCopiedText(true);
+                    setTimeout(() => setCopiedText(false), 2500);
+                  }}
+                  className="w-full py-2 px-3 rounded-xl border border-emerald-300 bg-white hover:bg-emerald-100 text-emerald-900 font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
+                >
+                  <Copy className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{copiedText ? 'Credentials Copied for WhatsApp!' : 'Copy WhatsApp Credentials Text'}</span>
+                </button>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    New Password (leave blank to auto-generate)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Auto-generate or enter custom password"
-                    value={customPassword}
-                    onChange={(e) => setCustomPassword(e.target.value)}
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700">
+                      <span>Custom Password</span>
+                      <FieldTooltip text="Enter a custom password or click Generate Secure Password below" />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const pass = `Kyros#${Math.floor(1000 + Math.random() * 9000)}@Solar`;
+                        setCustomPassword(pass);
+                      }}
+                      className="text-[11px] font-bold text-amber-600 hover:text-amber-700 underline"
+                    >
+                      Generate Secure Password
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Enter custom password or click Generate"
+                      value={customPassword}
+                      onChange={(e) => setCustomPassword(e.target.value)}
+                      className="w-full text-xs p-2.5 pr-10 rounded-xl border border-slate-200 focus:border-amber-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Leave blank to automatically generate a secure random password.
+                  </p>
                 </div>
               </div>
             )}
 
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => setResetPasswordUser(null)}
+                type="button"
+                onClick={() => {
+                  setResetPasswordUser(null);
+                  setResetResult(null);
+                  setCustomPassword('');
+                }}
                 className="flex-1 py-2 text-xs font-semibold rounded-xl border border-slate-200 hover:bg-slate-50"
               >
-                {resetResult ? 'Close' : 'Cancel'}
+                {resetResult ? 'Done' : 'Cancel'}
               </button>
               {!resetResult && (
                 <button
+                  type="button"
                   onClick={() =>
                     resetPasswordMutation.mutate({
                       id: resetPasswordUser.id,
@@ -1529,11 +1835,72 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
                     })
                   }
                   disabled={resetPasswordMutation.isPending}
-                  className="flex-1 py-2 text-xs font-bold rounded-xl bg-amber-500 text-slate-950 hover:bg-amber-400 disabled:opacity-60"
+                  className="flex-1 py-2 text-xs font-bold rounded-xl bg-amber-500 text-slate-950 hover:bg-amber-400 disabled:opacity-60 flex items-center justify-center gap-1.5 shadow-sm"
                 >
-                  {resetPasswordMutation.isPending ? 'Resetting...' : 'Confirm Reset'}
+                  {resetPasswordMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Confirm & Save Password</span>
+                  )}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: MOVE STAFF TO 30-DAY RETRIEVAL ARCHIVE */}
+      {deleteConfirmUser && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-2xl bg-rose-100 text-rose-600 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900">Archive Staff Member</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Move <span className="font-semibold text-slate-800">{deleteConfirmUser.full_name}</span> ({deleteConfirmUser.email}) to the 30-day retrieval archive.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-slate-800 text-xs space-y-2">
+              <p className="font-bold text-amber-950 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>30-Day Data Recovery Policy</span>
+              </p>
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                All historic leads, customer interactions, site surveys, quotations, and audit trail logs associated with this user will be preserved. You can restore this account at any time within 30 days from the <strong>30-Day Data Retrieval Archive</strong> tab.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmUser(null)}
+                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-slate-200 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteUserMutation.mutate(deleteConfirmUser.id)}
+                disabled={deleteUserMutation.isPending}
+                className="flex-1 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-500 disabled:opacity-60 flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                {deleteUserMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Archiving...</span>
+                  </>
+                ) : (
+                  <span>Move to Archive</span>
+                )}
+              </button>
             </div>
           </div>
         </div>

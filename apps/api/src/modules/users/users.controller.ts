@@ -42,6 +42,12 @@ export class UsersController {
     return this.usersService.updateMyProfile(user, body);
   }
 
+  @Get('export/credentials')
+  @Roles('super_admin')
+  async exportCredentials(@CurrentUser() user: AuthUser) {
+    return this.usersService.exportCredentials(user);
+  }
+
   @Get(':id')
   @Roles('super_admin', 'sales_admin')
   async findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
@@ -95,6 +101,24 @@ export class UsersController {
     @Body('password') password?: string,
   ) {
     return this.usersService.resetPassword(user, id, password);
+  }
+
+  @Post(':id/restore')
+  @Roles('super_admin')
+  async restoreUser(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.usersService.restoreUser(user, id);
+  }
+
+  @Delete(':id/permanent')
+  @Roles('super_admin')
+  async permanentDeleteUser(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.usersService.permanentDeleteUser(user, id);
   }
 
   @Delete(':id')

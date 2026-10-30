@@ -21,4 +21,8 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   team_id?: string;
+
+  @IsString()
+  @IsOptional()
+  password?: string;
 }
