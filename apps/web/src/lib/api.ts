@@ -1,28 +1,62 @@
 import { enqueueOfflineAction, flushOfflineQueue } from './offline-sync';
 
-function getApiBaseUrl(): string {
-  const envUrl = import.meta.env.VITE_API_URL;
-  // If running in browser and NOT on localhost/127.0.0.1:
-  if (typeof window !== 'undefined') {
-    const isLocalhost =
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname === '[::1]';
-
-    // When running on a deployed website (e.g. kyroscrm.netlify.app, custom domain):
-    if (!isLocalhost) {
-      // If VITE_API_URL is missing or points to localhost, fall back to '/api' (Netlify CDN proxy)
-      if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
-        return '/api';
-      }
-      return envUrl;
-    }
+function safeParseJson(text: string): any {
+  if (!text || !text.trim()) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
   }
-
-  return envUrl || 'https://solar-crm-06uk.onrender.com/api';
 }
 
-const API_BASE = getApiBaseUrl();
+export function getApiBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  // If running in browser:
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const isLocalhost =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]';
+
+    // 1. When running on Render web service/static site (e.g. solar-crm-web.onrender.com):
+    if (hostname.includes('onrender.com')) {
+      if (envUrl && !envUrl.includes('localhost') && envUrl.startsWith('http')) {
+        return envUrl;
+      }
+      return 'https://solar-crm-06uk.onrender.com/api';
+    }
+
+    // 2. When running on Netlify or custom production domain:
+    // Always use '/api' to leverage Netlify edge proxy (zero CORS, zero hardcoded backend IP)
+    // unless an explicit non-localhost HTTPS URL is configured.
+    if (!isLocalhost) {
+      if (envUrl && envUrl.startsWith('https://') && !envUrl.includes('localhost')) {
+        return envUrl;
+      }
+      return '/api';
+    }
+
+    // 3. When running on localhost:
+    // If VITE_API_URL explicitly specifies an HTTPS live backend, use it
+    if (envUrl && envUrl.startsWith('https://')) {
+      return envUrl;
+    }
+
+    // By default on localhost, use '/api' which Vite's dev server proxies to Render backend
+    // (or local backend if VITE_BACKEND_URL is set in environment). This prevents
+    // ERR_CONNECTION_REFUSED if the local NestJS server is not running!
+    return '/api';
+  }
+
+  // Build-time / test fallback
+  if (envUrl && envUrl.startsWith('https://')) {
+    return envUrl;
+  }
+  return '/api';
+}
+
+export const API_BASE = getApiBaseUrl();
 
 export async function apiRequest<T = any>(
   endpoint: string,
@@ -74,31 +108,78 @@ export async function apiRequest<T = any>(
     throw err;
   }
 
+  const rawText = await res.text();
+  const parsed = safeParseJson(rawText);
+
   if (!res.ok) {
-    let errorMsg = 'An error occurred';
-    try {
-      const errorJson = await res.json();
-      errorMsg = errorJson.message || errorJson.error || errorMsg;
-    } catch {
-      errorMsg = res.statusText;
+    if (parsed && (parsed.message || parsed.error)) {
+      throw new Error(parsed.message || parsed.error);
     }
-    throw new Error(errorMsg);
+    if (rawText.trim().startsWith('<')) {
+      throw new Error(
+        `Endpoint ${endpoint} returned HTML (Status ${res.status}). Ensure the backend API is running and reachable.`,
+      );
+    }
+    throw new Error(res.statusText || `Request failed with HTTP status ${res.status}`);
   }
 
-  // Handle empty or attachment response
-  const contentType = res.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    return res.json();
+  if (parsed !== null) {
+    return parsed;
   }
 
-  // Guard against Netlify SPA fallback returning index.html for API routes
-  if (contentType && contentType.includes('text/html')) {
+  return rawText as any;
+}
+
+/**
+ * Robust file upload helper using FormData, attaching Bearer auth and safely
+ * handling non-JSON or HTML gateway errors without throwing Unexpected end of JSON input.
+ */
+export async function apiUpload<T = any>(
+  endpoint: string,
+  formData: FormData,
+  options: {
+    headers?: Record<string, string>;
+  } = {},
+): Promise<T> {
+  const token = localStorage.getItem('solar_auth_token');
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+  } catch (err: any) {
     throw new Error(
-      `Endpoint ${endpoint} returned HTML instead of JSON. Ensure the backend API is deployed on Render and VITE_API_URL is configured.`,
+      `Unable to reach backend API at ${API_BASE}. Please ensure the server is running or check internet connectivity.`,
     );
   }
 
-  return res as any;
+  const rawText = await res.text();
+  const parsed = safeParseJson(rawText);
+
+  if (!res.ok) {
+    if (parsed && (parsed.message || parsed.error)) {
+      throw new Error(parsed.message || parsed.error);
+    }
+    if (rawText.trim().startsWith('<')) {
+      throw new Error(
+        `Upload endpoint ${endpoint} returned HTML (Status ${res.status}). Backend server may be restarting.`,
+      );
+    }
+    throw new Error(res.statusText || `Upload failed with HTTP status ${res.status}`);
+  }
+
+  if (parsed !== null) {
+    return parsed;
+  }
+
+  return rawText as any;
 }
 
 /**
@@ -111,20 +192,30 @@ export async function downloadFile(
   filename?: string,
 ): Promise<void> {
   const token = localStorage.getItem('solar_auth_token');
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    method: 'GET',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'GET',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+  } catch (err: any) {
+    throw new Error(`Unable to connect to download service at ${API_BASE}`);
+  }
 
   if (!res.ok) {
-    let errorMsg = 'Download failed';
+    let errorMsg = `Download failed with HTTP status ${res.status}`;
     try {
-      const errorJson = await res.json();
-      errorMsg = errorJson.message || errorJson.error || errorMsg;
+      const text = await res.text();
+      const parsed = safeParseJson(text);
+      if (parsed && (parsed.message || parsed.error)) {
+        errorMsg = parsed.message || parsed.error;
+      } else if (res.statusText) {
+        errorMsg = res.statusText;
+      }
     } catch {
-      errorMsg = res.statusText || errorMsg;
+      // Keep default error message
     }
     throw new Error(errorMsg);
   }

@@ -18,6 +18,7 @@ const ALL_FEATURES = [
   'kpi_dashboard',
   'service_tickets',
   'whatsapp',
+  'system_design',
 ];
 
 function featureSet(enabled: string[]): Record<string, boolean> {
@@ -30,10 +31,10 @@ const FALLBACK_ROLE_FEATURES: Record<string, Record<string, boolean>> = {
   super_admin: featureSet(ALL_FEATURES),
   sales_admin: featureSet([
     'leads', 'telecalling', 'bulk_import', 'export_excel', 'export_pdf', 'quotation',
-    'payments', 'survey', 'installation', 'reports', 'kpi_dashboard', 'service_tickets', 'whatsapp',
+    'payments', 'survey', 'installation', 'reports', 'kpi_dashboard', 'service_tickets', 'whatsapp', 'system_design',
   ]),
-  telecaller: featureSet(['leads', 'telecalling', 'kpi_dashboard', 'whatsapp']),
-  sales_exec: featureSet(['leads', 'quotation', 'survey', 'kpi_dashboard', 'whatsapp']),
+  telecaller: featureSet(['leads', 'telecalling', 'kpi_dashboard', 'whatsapp', 'quotation', 'system_design']),
+  sales_exec: featureSet(['leads', 'quotation', 'survey', 'kpi_dashboard', 'whatsapp', 'system_design']),
   surveyor: featureSet(['leads', 'survey', 'kpi_dashboard']),
   installer: featureSet(['leads', 'installation', 'kpi_dashboard', 'service_tickets']),
   accounts: featureSet([

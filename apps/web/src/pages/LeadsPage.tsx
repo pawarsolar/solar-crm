@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, lazy, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search,
@@ -16,14 +16,19 @@ import {
   Trash2,
   Sparkles,
   ShieldAlert,
+  MapPin,
+  Tag,
 } from 'lucide-react';
 import { LeadCard, Lead } from '../components/leads/LeadCard';
-import { LeadModal } from '../components/leads/LeadModal';
-import { BulkAllocationTable } from '../components/leads/BulkAllocationTable';
-import { LeadFunnelChart } from '../components/charts/LeadFunnelChart';
-import { LeadRecoveryBinModal } from '../components/leads/LeadRecoveryBinModal';
 import { apiRequest, downloadFile } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { toast } from '../context/ToastContext';
+import { MP_CITIES, LEAD_SOURCES } from '../data/lead-options';
+
+const LeadModal = lazy(() => import('../components/leads/LeadModal').then((m) => ({ default: m.LeadModal })));
+const BulkAllocationTable = lazy(() => import('../components/leads/BulkAllocationTable').then((m) => ({ default: m.BulkAllocationTable })));
+const LeadFunnelChart = lazy(() => import('../components/charts/LeadFunnelChart').then((m) => ({ default: m.LeadFunnelChart })));
+const LeadRecoveryBinModal = lazy(() => import('../components/leads/LeadRecoveryBinModal').then((m) => ({ default: m.LeadRecoveryBinModal })));
 
 const PIPELINE_STAGES = [
   'ALL',
@@ -57,6 +62,8 @@ export const LeadsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStage, setSelectedStage] = useState('ALL');
   const [dateFilter, setDateFilter] = useState('ALL');
+  const [cityFilter, setCityFilter] = useState('ALL');
+  const [sourceFilter, setSourceFilter] = useState('ALL');
   const [showFunnel, setShowFunnel] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'allocate'>('list');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -78,17 +85,19 @@ export const LeadsPage: React.FC = () => {
     onSuccess: (res) => {
       setIsPurgeModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      alert(res.message || 'All seed pipeline data successfully wiped!');
+      toast.success(res.message || 'All seed pipeline data successfully wiped!');
     },
-    onError: (err: any) => alert(err.message || 'Failed to purge seed data'),
+    onError: (err: any) => toast.error(err.message || 'Failed to purge seed data'),
   });
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['leads', selectedStage, searchTerm, dateFilter],
+    queryKey: ['leads', selectedStage, searchTerm, dateFilter, cityFilter, sourceFilter],
     queryFn: () => {
       const params = new URLSearchParams();
       if (selectedStage !== 'ALL') params.append('stage', selectedStage);
       if (dateFilter !== 'ALL') params.append('date_preset', dateFilter);
+      if (cityFilter !== 'ALL') params.append('city', cityFilter);
+      if (sourceFilter !== 'ALL') params.append('source', sourceFilter);
       if (searchTerm) params.append('q', searchTerm);
       return apiRequest(`/leads?${params.toString()}`);
     },
@@ -115,16 +124,18 @@ export const LeadsPage: React.FC = () => {
   const handleDownloadSampleXlsx = async () => {
     try {
       await downloadFile('/leads/import/sample-xlsx', 'lead-import-sample.xlsx');
+      toast.success('Sample Excel sheet downloaded');
     } catch (err: any) {
-      alert(err.message || 'Download failed');
+      toast.error(err.message || 'Download failed');
     }
   };
 
   const handleDownloadSampleCsv = async () => {
     try {
       await downloadFile('/leads/import/sample-csv', 'lead-import-sample.csv');
+      toast.success('Sample CSV sheet downloaded');
     } catch (err: any) {
-      alert(err.message || 'Download failed');
+      toast.error(err.message || 'Download failed');
     }
   };
 
@@ -250,36 +261,78 @@ export const LeadsPage: React.FC = () => {
       </div>
 
       {viewMode === 'allocate' ? (
-        <BulkAllocationTable />
+        <Suspense fallback={<div className="h-48 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-amber-500" /></div>}>
+          <BulkAllocationTable />
+        </Suspense>
       ) : (
         <>
           {/* Search & Filter Bar */}
-          <div className="flex flex-col sm:flex-row gap-2.5">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search by customer name, phone (+91...), or city..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full text-sm pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white"
-              />
-            </div>
+          <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col md:flex-row gap-2.5">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search by customer name, phone (+91...), or city..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full text-sm pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white"
+                />
+              </div>
 
-            {/* Import Date Range Preset Filter */}
-            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white shadow-xs">
-              <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer pr-1"
-              >
-                {DATE_PRESETS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                {/* MP City / District Filter */}
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white shadow-xs">
+                  <MapPin className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <select
+                    value={cityFilter}
+                    onChange={(e) => setCityFilter(e.target.value)}
+                    className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer pr-1 max-w-[140px] truncate"
+                    title="Filter leads by MP City / District"
+                  >
+                    <option value="ALL">All MP Cities</option>
+                    {MP_CITIES.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Lead Source Filter */}
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white shadow-xs">
+                  <Tag className="w-4 h-4 text-blue-500 shrink-0" />
+                  <select
+                    value={sourceFilter}
+                    onChange={(e) => setSourceFilter(e.target.value)}
+                    className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer pr-1 max-w-[150px] truncate"
+                    title="Filter leads by Acquisition Channel"
+                  >
+                    <option value="ALL">All Sources</option>
+                    {LEAD_SOURCES.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Import Date Range Preset Filter */}
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white shadow-xs">
+                  <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
+                  <select
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value)}
+                    className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer pr-1"
+                  >
+                    {DATE_PRESETS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
 
             {/* Horizontal Scrolling Stage Filter Pills */}
@@ -303,13 +356,15 @@ export const LeadsPage: React.FC = () => {
           {/* Interactive Conversion Funnel Display */}
           {showFunnel && (
             <div className="animate-in fade-in zoom-in-98 duration-200">
-              <LeadFunnelChart
-                data={funnelData}
-                selectedStage={selectedStage}
-                onStageSelect={(st) => setSelectedStage(st === selectedStage ? 'ALL' : st)}
-                title={isAdmin ? 'Organization Pipeline Conversion Funnel' : 'Your Assigned Leads Conversion Funnel'}
-                subtitle={`Conversion rate & drop-off for ${leads.length} leads in current view (Click stage to filter)`}
-              />
+              <Suspense fallback={<div className="h-40 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-amber-500" /></div>}>
+                <LeadFunnelChart
+                  data={funnelData}
+                  selectedStage={selectedStage}
+                  onStageSelect={(st) => setSelectedStage(st === selectedStage ? 'ALL' : st)}
+                  title={isAdmin ? 'Organization Pipeline Conversion Funnel' : 'Your Assigned Leads Conversion Funnel'}
+                  subtitle={`Conversion rate & drop-off for ${leads.length} leads in current view (Click stage to filter)`}
+                />
+              </Suspense>
             </div>
           )}
 
@@ -406,13 +461,21 @@ export const LeadsPage: React.FC = () => {
   )}
 
       {/* Add Lead Modal */}
-      <LeadModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+      {isAddModalOpen && (
+        <Suspense fallback={null}>
+          <LeadModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+        </Suspense>
+      )}
 
       {/* 30-Day Recovery Bin Modal */}
-      <LeadRecoveryBinModal
-        isOpen={isRecoveryBinOpen}
-        onClose={() => setIsRecoveryBinOpen(false)}
-      />
+      {isRecoveryBinOpen && (
+        <Suspense fallback={null}>
+          <LeadRecoveryBinModal
+            isOpen={isRecoveryBinOpen}
+            onClose={() => setIsRecoveryBinOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* Purge Seed Confirmation Modal */}
       {isPurgeModalOpen && (

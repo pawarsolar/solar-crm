@@ -13,11 +13,7 @@ async function runSeed() {
 
   try {
     const seedSqlPath = path.resolve(__dirname, '../../../supabase/seed.sql');
-    if (!fs.existsSync(seedSqlPath)) {
-      throw new Error(`Seed SQL file not found at ${seedSqlPath}`);
-    }
-
-    const sql = fs.readFileSync(seedSqlPath, 'utf8');
+    const sql = await fs.promises.readFile(seedSqlPath, 'utf8');
 
     // `FORCE ROW LEVEL SECURITY` applies to the owner too, so a seeding
     // connection must explicitly opt out of tenant policies.
@@ -25,6 +21,11 @@ async function runSeed() {
     try {
       await client.query("select set_config('app.bypass_rls', 'on', false)");
       await client.query(sql);
+      try {
+        await client.query("NOTIFY pgrst, 'reload schema'");
+      } catch {
+        // Ignore
+      }
     } finally {
       client.release();
     }

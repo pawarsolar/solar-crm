@@ -13,6 +13,8 @@ const PaymentsPage = lazy(() => import('./pages/PaymentsPage').then((m) => ({ de
 const ImportPage = lazy(() => import('./pages/ImportPage').then((m) => ({ default: m.ImportPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
 const ComponentsPage = lazy(() => import('./pages/ComponentsPage').then((m) => ({ default: m.ComponentsPage })));
+const SystemDesignStudioPage = lazy(() => import('./pages/SystemDesignStudioPage').then((m) => ({ default: m.SystemDesignStudioPage })));
+const CustomerDesignViewerPage = lazy(() => import('./pages/CustomerDesignViewerPage').then((m) => ({ default: m.CustomerDesignViewerPage })));
 const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 
@@ -116,6 +118,14 @@ export const AppRoutes: React.FC = () => {
             }
           />
           <Route
+            path="system-design"
+            element={
+              <GuardedRoute feature="system_design">
+                <SystemDesignStudioPage />
+              </GuardedRoute>
+            }
+          />
+          <Route
             path="payments"
             element={
               <GuardedRoute feature="payments">
@@ -157,6 +167,9 @@ export const AppRoutes: React.FC = () => {
             }
           />
         </Route>
+
+        {/* Public Customer Interactive 3D Viewer Route (Zero Login Needed) */}
+        <Route path="/viewer/design/:designId" element={<CustomerDesignViewerPage />} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

@@ -34,6 +34,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { apiRequest, downloadFile } from '../lib/api';
+import { toast } from '../context/ToastContext';
 import {
   calculateSolarSystem,
   PANEL_OPTIONS,
@@ -165,8 +166,9 @@ export const QuotationsPage: React.FC = () => {
         `/quotations/${quoteId}/pdf`,
         `Quotation-${quoteNumber.replace(/\//g, '_')}.pdf`
       );
+      toast.success(`Proposal ${quoteNumber} PDF downloaded successfully`);
     } catch (err: any) {
-      alert(`Error downloading PDF: ${err.message}`);
+      toast.error(`Error downloading PDF: ${err.message}`);
     } finally {
       setDownloadingId(null);
     }
@@ -201,10 +203,11 @@ export const QuotationsPage: React.FC = () => {
       refetchAllQuotes();
       // Set modal state so user sees a clean popup
       setCreatedQuoteModal(data);
+      toast.success(`Proposal ${data.number} created successfully!`);
       // Automatically trigger download
       await handleDownloadPdf(data.id, data.number);
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to generate proposal'),
   });
 
   // Action to load an existing quotation for editing / revising

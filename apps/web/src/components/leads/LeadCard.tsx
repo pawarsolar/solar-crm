@@ -1,6 +1,7 @@
 import React from 'react';
-import { Phone, MessageSquare, Zap, Calendar, User, ChevronRight } from 'lucide-react';
+import { Phone, MessageSquare, Zap, Calendar, User, ChevronRight, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatLeadSource } from '../../data/lead-options';
 
 export interface Lead {
   id: string;
@@ -35,6 +36,7 @@ const stageColorMap: Record<string, string> = {
 
 export const LeadCard: React.FC<{ lead: Lead; onQuickAction?: () => void }> = ({ lead }) => {
   const navigate = useNavigate();
+  const sourceInfo = formatLeadSource(lead.source);
 
   const cleanPhone = lead.phone.replace(/[^0-9]/g, '');
   const whatsappUrl = `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : '91' + cleanPhone}?text=Hello%20${encodeURIComponent(lead.name)},%20this%20is%20Kyros%20Solar%20regarding%20your%20rooftop%20solar%20inquiry.`;
@@ -49,7 +51,17 @@ export const LeadCard: React.FC<{ lead: Lead; onQuickAction?: () => void }> = ({
           <h3 className="font-semibold text-slate-900 text-base group-hover:text-amber-600 transition-colors">
             {lead.name}
           </h3>
-          <p className="text-xs text-slate-500">{lead.city || 'Location unassigned'}</p>
+          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+            <span className="text-xs text-slate-500 flex items-center gap-1 font-medium">
+              <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+              {lead.city || 'MP Location'}
+            </span>
+            {lead.source && (
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${sourceInfo.badgeClass}`}>
+                {sourceInfo.label}
+              </span>
+            )}
+          </div>
         </div>
         <span
           className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${

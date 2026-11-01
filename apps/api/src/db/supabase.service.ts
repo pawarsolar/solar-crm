@@ -34,6 +34,7 @@ export class SupabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SupabaseService.name);
   public client: SupabaseClient;
   public pool: Pool;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
   private lastHealthReport: SchemaHealthReport = {
     healthy: true,
     databaseConnected: false,
@@ -73,6 +74,65 @@ export class SupabaseService implements OnModuleInit, OnModuleDestroy {
 
     // Run automatic schema health check upon initialization
     await this.checkSchemaHealth();
+
+    // Start background automated PostgREST health heartbeat cron
+    this.startPostgrestHeartbeatCron();
+  }
+
+  /**
+   * Automated background heartbeat cron that periodically verifies PostgREST schema cache
+   * and issues reload notifications proactively to prevent desyncs during migrations or cold starts.
+   */
+  private startPostgrestHeartbeatCron() {
+    const intervalMs = Number(process.env.POSTGREST_HEARTBEAT_INTERVAL_MS) || 5 * 60 * 1000; // 5 minutes default
+    this.stopPostgrestHeartbeatCron();
+
+    this.heartbeatTimer = setInterval(async () => {
+      try {
+        const report = await this.checkSchemaHealth();
+        if (report.syncRequired || !report.schemaCacheValid) {
+          this.logger.warn('[PostgREST Heartbeat Cron] Schema cache issue detected during heartbeat. Dispatching proactive reload...');
+          await this.triggerSchemaReload();
+        } else {
+          this.logger.debug?.('[PostgREST Heartbeat Cron] PostgREST schema cache verified healthy.');
+        }
+      } catch (err: any) {
+        this.logger.warn(`[PostgREST Heartbeat Cron] Error during scheduled check: ${err.message}`);
+      }
+    }, intervalMs);
+
+    // Unref timer so it does not block Node process termination in scripts or test runners
+    if (this.heartbeatTimer && typeof this.heartbeatTimer.unref === 'function') {
+      this.heartbeatTimer.unref();
+    }
+  }
+
+  private stopPostgrestHeartbeatCron() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  /**
+   * Proactively triggers PostgREST schema reload over PostgreSQL NOTIFY
+   */
+  async triggerSchemaReload(): Promise<{ reloaded: boolean; timestamp: string; report: SchemaHealthReport }> {
+    if (this.pool) {
+      try {
+        await this.pool.query("NOTIFY pgrst, 'reload schema'");
+        this.logger.log("[PostgREST] Dispatched NOTIFY pgrst, 'reload schema' proactively.");
+        await new Promise((r) => setTimeout(r, 400));
+      } catch (err: any) {
+        this.logger.warn(`[PostgREST] Failed to dispatch reload notification: ${err.message}`);
+      }
+    }
+    const report = await this.checkSchemaHealth();
+    return {
+      reloaded: true,
+      timestamp: new Date().toISOString(),
+      report,
+    };
   }
 
   /**
@@ -93,8 +153,27 @@ export class SupabaseService implements OnModuleInit, OnModuleDestroy {
           ping.error.message.includes('relation') ||
           ping.error.code === 'PGRST205'
         ) {
-          schemaCacheValid = false;
-          missing.push('leads');
+          // Attempt autonomous recovery: notify PostgREST via pg pool to reload schema cache
+          if (this.pool) {
+            try {
+              await this.pool.query("NOTIFY pgrst, 'reload schema'");
+              await new Promise((r) => setTimeout(r, 350));
+              const retryPing = await this.client.from('leads').select('id').limit(1);
+              if (!retryPing.error) {
+                isConnected = true;
+                schemaCacheValid = true;
+              } else {
+                schemaCacheValid = false;
+                missing.push('leads');
+              }
+            } catch {
+              schemaCacheValid = false;
+              missing.push('leads');
+            }
+          } else {
+            schemaCacheValid = false;
+            missing.push('leads');
+          }
         }
       } else {
         isConnected = true;
@@ -160,6 +239,7 @@ export class SupabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
+    this.stopPostgrestHeartbeatCron();
     if (this.pool) {
       await this.pool.end();
     }

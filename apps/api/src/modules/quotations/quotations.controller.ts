@@ -4,6 +4,7 @@ import {
   Get,
   Body,
   Param,
+  Query,
   Res,
   UseGuards,
   Header,
@@ -32,8 +33,13 @@ export class QuotationsController {
 
   @Get()
   @RequireFeature('quotation')
-  async findAll(@CurrentUser() user: AuthUser) {
-    return this.quotationsService.findAll(user);
+  async findAll(
+    @CurrentUser() user: AuthUser,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.quotationsService.findAll(user, { page, limit, cursor });
   }
 
   @Get('lead/:leadId')

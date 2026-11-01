@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Database, AlertTriangle, RefreshCw, X, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from '../../context/ToastContext';
 
 interface SchemaHealthData {
   healthy: boolean;
@@ -11,13 +12,19 @@ interface SchemaHealthData {
   notes?: string;
 }
 
+const DISMISS_KEY = 'schema_health_dismissed_until';
+
 export const SchemaHealthBanner: React.FC = () => {
   const { user } = useAuth();
   const [health, setHealth] = useState<SchemaHealthData | null>(null);
   const [checking, setChecking] = useState(false);
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
-      return sessionStorage.getItem('schema_health_dismissed') === 'true';
+      const until = localStorage.getItem(DISMISS_KEY);
+      if (until && Number(until) > Date.now()) {
+        return true;
+      }
+      return false;
     } catch {
       return false;
     }
@@ -26,7 +33,9 @@ export const SchemaHealthBanner: React.FC = () => {
   const handleDismiss = () => {
     setDismissed(true);
     try {
-      sessionStorage.setItem('schema_health_dismissed', 'true');
+      // Dismiss for 24 hours
+      localStorage.setItem(DISMISS_KEY, String(Date.now() + 24 * 60 * 60 * 1000));
+      toast.info('Schema sync alert dismissed for 24 hours.');
     } catch {
       // Ignore
     }
@@ -51,13 +60,20 @@ export const SchemaHealthBanner: React.FC = () => {
 
   const handleRecheck = async () => {
     setChecking(true);
+    toast.info('Checking PostgreSQL schema cache...');
     try {
       const updated = await apiRequest<SchemaHealthData>('/health/schema/sync-check', {
         method: 'POST',
       });
       setHealth(updated);
+      if (updated.healthy) {
+        toast.success('All database CRM tables verified and healthy!');
+      } else {
+        toast.warning(updated.notes || 'PostgreSQL schema cache sync required.');
+      }
     } catch {
       await fetchHealth();
+      toast.info('Schema check completed.');
     } finally {
       setChecking(false);
     }

@@ -11,6 +11,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
+import { toast } from '../context/ToastContext';
 
 export const PaymentsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -54,9 +55,9 @@ export const PaymentsPage: React.FC = () => {
       setShowAddModal(false);
       setAmount('');
       setRefNo('');
-      alert('Payment milestone saved!');
+      toast.success('Payment milestone saved successfully!');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to save payment milestone'),
   });
 
   const summary = paymentsData?.summary || { totalPayable: 0, totalPaid: 0, outstanding: 0 };

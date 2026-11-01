@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { toast } from '../context/ToastContext';
 import { useLocation } from 'react-router-dom';
 import { BulkAllocationTable } from '../components/leads/BulkAllocationTable';
 
@@ -374,10 +375,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
       setProvisionErrors({});
       setProvisionTouched({});
       setProvisionBannerError(null);
-      alert(`Staff account provisioned successfully for ${data.full_name} (${ROLE_LABELS[data.role] || data.role})!`);
+      toast.success(`Staff account provisioned successfully for ${data.full_name} (${ROLE_LABELS[data.role] || data.role})!`);
     },
     onError: (err: any) => {
       setProvisionBannerError(err.message || 'Failed to provision staff member');
+      toast.error(err.message || 'Failed to provision staff member');
     },
   });
 
@@ -388,6 +390,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
     setProvisionErrors(errors);
     if (Object.keys(errors).length > 0) {
       setProvisionBannerError('Please fix the highlighted validation errors before continuing.');
+      toast.warning('Please fix the highlighted validation errors before continuing.');
       return;
     }
     createUserMutation.mutate();
@@ -405,9 +408,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
       setEditErrors({});
       setEditTouched({});
       setEditBannerError(null);
-      alert('User details and role updated successfully!');
+      toast.success('User details and role updated successfully!');
     },
-    onError: (err: any) => setEditBannerError(err.message || 'Failed to update user'),
+    onError: (err: any) => {
+      setEditBannerError(err.message || 'Failed to update user');
+      toast.error(err.message || 'Failed to update user');
+    },
   });
 
   const handleSaveEditStaff = () => {
@@ -418,6 +424,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
     setEditErrors(errors);
     if (Object.keys(errors).length > 0) {
       setEditBannerError('Please fix the highlighted errors before saving.');
+      toast.warning('Please fix the highlighted errors before saving.');
       return;
     }
     updateUserMutation.mutate({
@@ -433,16 +440,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
       apiRequest(`/users/${id}/role`, { method: 'PATCH', body: { role } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users', 'list'] });
-      alert('Role assignment updated successfully!');
+      toast.success('Role assignment updated successfully!');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to update role'),
   });
 
   const toggleStatusMutation = useMutation({
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
       apiRequest(`/users/${id}/status`, { method: 'PATCH', body: { is_active } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users', 'list'] }),
-    onError: (err: any) => alert(err.message),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'list'] });
+      toast.success('User account status updated');
+    },
+    onError: (err: any) => toast.error(err.message || 'Failed to toggle status'),
   });
 
   const resetPasswordMutation = useMutation({
@@ -453,8 +463,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
       }),
     onSuccess: (data: any) => {
       setResetResult(data);
+      toast.success('Temporary password generated successfully');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to reset password'),
   });
 
   const deleteUserMutation = useMutation({
@@ -462,34 +473,34 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['users', 'list'] });
       setDeleteConfirmUser(null);
-      alert(data.message || 'Staff member moved to 30-day retrieval archive.');
+      toast.success(data.message || 'Staff member moved to 30-day retrieval archive.');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to archive staff member'),
   });
 
   const restoreUserMutation = useMutation({
     mutationFn: (id: string) => apiRequest(`/users/${id}/restore`, { method: 'POST' }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['users', 'list'] });
-      alert(data.message || 'Staff member restored successfully.');
+      toast.success(data.message || 'Staff member restored successfully.');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to restore staff member'),
   });
 
   const permanentDeleteUserMutation = useMutation({
     mutationFn: (id: string) => apiRequest(`/users/${id}/permanent`, { method: 'DELETE' }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['users', 'list'] });
-      alert(data.message || 'Staff member permanently purged from system.');
+      toast.success(data.message || 'Staff member permanently purged from system.');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to purge staff member'),
   });
 
   const handleDownloadCredentials = async () => {
     try {
       const data = await apiRequest<any[]>('/users/export/credentials');
       if (!data || data.length === 0) {
-        alert('No user credentials available to export.');
+        toast.warning('No user credentials available to export.');
         return;
       }
       const headers = [
@@ -521,14 +532,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      toast.success('Staff credentials CSV exported successfully');
     } catch (err: any) {
-      alert(`Error exporting credentials: ${err.message}`);
+      toast.error(`Error exporting credentials: ${err.message}`);
     }
   };
 
   const impersonateMutation = useMutation({
     mutationFn: (id: string) => impersonate(id),
-    onError: (err: any) => alert(err.message || 'Unable to start a child login session'),
+    onError: (err: any) => toast.error(err.message || 'Unable to start a child login session'),
   });
 
   const decideDeletionMutation = useMutation({
@@ -537,9 +549,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['deletion_requests'] });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      alert(data.message);
+      toast.success(data.message || 'Deletion decision processed');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to process deletion decision'),
   });
 
   const saveMatrixMutation = useMutation({
@@ -553,9 +565,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['features', 'matrix'] });
       setPendingGrants({});
-      alert(`${data.updated} permission change(s) saved.`);
+      toast.success(`${data.updated} permission change(s) saved.`);
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to save permissions'),
   });
 
   const updateGrantMutation = useMutation({
@@ -566,7 +578,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ initialTab }) => {
       enabled: boolean;
     }) => apiRequest('/features/grants', { method: 'PUT', body }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['features', 'matrix'] }),
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to update feature grant'),
   });
 
   // Bulk presets for Feature Matrix

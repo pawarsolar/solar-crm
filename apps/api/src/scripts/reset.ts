@@ -20,8 +20,8 @@ async function resetDb() {
     const migrationPath = path.resolve(__dirname, '../../../supabase/migrations/20261020000000_init_schema.sql');
     const seedPath = path.resolve(__dirname, '../../../supabase/seed.sql');
 
-    const migrationSql = fs.readFileSync(migrationPath, 'utf8');
-    const seedSql = fs.readFileSync(seedPath, 'utf8');
+    const migrationSql = await fs.promises.readFile(migrationPath, 'utf8');
+    const seedSql = await fs.promises.readFile(seedPath, 'utf8');
 
     console.log('Applying schema migration...');
     const client = await pool.connect();
@@ -32,6 +32,12 @@ async function resetDb() {
 
       console.log('Applying seed data...');
       await client.query(seedSql);
+
+      try {
+        await client.query("NOTIFY pgrst, 'reload schema'");
+      } catch {
+        // Ignore
+      }
     } finally {
       client.release();
     }

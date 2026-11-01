@@ -15,6 +15,7 @@ import {
   Loader2,
   Package,
   UserCog,
+  Box,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { FeatureGate } from '../ui/FeatureGate';
@@ -42,6 +43,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     { label: 'Dashboard', path: '/', icon: LayoutDashboard, feature: 'kpi_dashboard' },
     { label: 'Pipeline Leads', path: '/leads', icon: Users, feature: 'leads' },
     { label: 'Follow-ups', path: '/followups', icon: CalendarCheck, feature: 'leads' },
+    { label: '3D Solar Studio', path: '/system-design', icon: Box, feature: 'system_design' },
     { label: 'Quotations', path: '/quotations', icon: FileSpreadsheet, feature: 'quotation' },
     { label: 'Payments', path: '/payments', icon: CreditCard, feature: 'payments' },
     { label: 'Components', path: '/components', icon: Package },

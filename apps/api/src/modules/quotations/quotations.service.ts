@@ -83,27 +83,72 @@ export class QuotationsService {
     return 78000; // Cap at 3kW+
   }
 
-  async findAll(user: AuthUser) {
+  async findAll(
+    user: AuthUser,
+    pagination: { page?: number; limit?: number; cursor?: string } = {},
+  ) {
+    const limit = Math.min(Math.max(Number(pagination.limit) || 50, 1), 200);
+    const page = Math.max(Number(pagination.page) || 1, 1);
+    const offset = (page - 1) * limit;
+
     try {
-      const { data } = await this.supabaseService.client
+      let builder = this.supabaseService.client
         .from('quotations')
-        .select('*')
+        .select('*', { count: 'exact' })
+        .eq('org_id', user.org_id)
         .order('created_at', { ascending: false });
 
-      if (data && data.length > 0) {
-        // Merge with in-memory avoiding duplicates
-        const combined = [...this.inMemoryQuotations];
-        for (const item of data) {
-          if (!combined.some((q) => q.id === item.id || q.number === item.number)) {
-            combined.push(item);
+      if (pagination.cursor) {
+        builder = builder.lt('created_at', pagination.cursor).limit(limit);
+      } else if (pagination.page || pagination.limit) {
+        builder = builder.range(offset, offset + limit - 1);
+      } else {
+        builder = builder.limit(limit);
+      }
+
+      const { data, count, error } = await builder;
+
+      if (!error && data) {
+        // If caller did not provide pagination params, return array (capped) for backward compatibility
+        if (!pagination.page && !pagination.limit && !pagination.cursor) {
+          const combined = [...this.inMemoryQuotations];
+          for (const item of data) {
+            if (!combined.some((q) => q.id === item.id || q.number === item.number)) {
+              combined.push(item);
+            }
           }
+          return combined.slice(0, 100);
         }
-        return combined;
+
+        const items = data;
+        const total = count ?? items.length;
+        const nextCursor = items.length === limit ? items[items.length - 1].created_at : null;
+        return {
+          items,
+          total,
+          page,
+          pageSize: limit,
+          totalPages: Math.ceil(total / limit),
+          nextCursor,
+        };
       }
     } catch {
       // Return in-memory list
     }
-    return this.inMemoryQuotations;
+
+    if (!pagination.page && !pagination.limit && !pagination.cursor) {
+      return this.inMemoryQuotations.slice(0, 100);
+    }
+
+    const items = this.inMemoryQuotations.slice(offset, offset + limit);
+    return {
+      items,
+      total: this.inMemoryQuotations.length,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(this.inMemoryQuotations.length / limit),
+      nextCursor: null,
+    };
   }
 
   async create(dto: CreateQuotationDto, user: AuthUser) {

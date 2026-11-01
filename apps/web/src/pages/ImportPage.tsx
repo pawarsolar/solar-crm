@@ -10,13 +10,19 @@ import {
   Users,
   Download,
   FileText,
+  Cpu,
+  Zap,
 } from 'lucide-react';
-import { apiRequest, downloadFile } from '../lib/api';
+import { apiRequest, downloadFile, apiUpload } from '../lib/api';
+import { toast } from '../context/ToastContext';
+import { parseSpreadsheetWithWorker, ExcelStreamProgress } from '../lib/excel-worker-client';
 
 export const ImportPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [workerProgress, setWorkerProgress] = useState<ExcelStreamProgress | null>(null);
+  const [workerDuration, setWorkerDuration] = useState<number | null>(null);
   const [splitField, setSplitField] = useState('city');
   const [assignedUser, setAssignedUser] = useState('');
   const [importResult, setImportResult] = useState<any>(null);
@@ -31,33 +37,66 @@ export const ImportPage: React.FC = () => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
+    // Client-side file validation
+    const validExtensions = ['.xlsx', '.xls', '.csv'];
+    const fileNameLower = selectedFile.name.toLowerCase();
+    const isValidExtension = validExtensions.some((ext) => fileNameLower.endsWith(ext));
+
+    if (!isValidExtension) {
+      toast.error('Only spreadsheet files (.xlsx, .xls, .csv) are supported.');
+      e.target.value = '';
+      return;
+    }
+
+    if (selectedFile.size > 25 * 1024 * 1024) {
+      toast.error('File size exceeds the 25 MB limit. Please upload a smaller file.');
+      e.target.value = '';
+      return;
+    }
+
     setFile(selectedFile);
     setIsUploading(true);
     setImportResult(null);
-
-    const formData = new FormData();
-    formData.append('file', selectedFile);
+    setWorkerProgress({ stage: 'reading', percent: 5, rowsProcessed: 0 });
+    setWorkerDuration(null);
 
     try {
-      const token = localStorage.getItem('solar_auth_token');
-      const res = await fetch('/api/leads/import/preview', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
+      // 1. Offload sheet decoding to background WebWorker (handles >25,000 rows without locking UI)
+      const workerResult = await parseSpreadsheetWithWorker(
+        selectedFile,
+        selectedFile.name,
+        (progress) => setWorkerProgress(progress),
+        50, // max 50 preview rows
+      );
+
+      setWorkerDuration(workerResult.durationMs);
+      setPreviewData({
+        headers: workerResult.headers,
+        previewRows: workerResult.previewRows,
+        totalRowsEstimate: workerResult.totalRows,
+        workerDecoded: true,
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'Failed to inspect file');
-      }
+      toast.success(
+        `WebWorker streamed ${workerResult.totalRows.toLocaleString()} rows in ${workerResult.durationMs}ms without UI blocking!`,
+      );
+    } catch (workerErr: any) {
+      console.warn('WebWorker parser fallback, attempting server preview:', workerErr);
+      // Fallback to server-side preview if WebWorker fails
+      const formData = new FormData();
+      formData.append('file', selectedFile);
 
-      const data = await res.json();
-      setPreviewData(data);
-    } catch (err: any) {
-      alert(err.message);
-      setFile(null);
+      try {
+        const data = await apiUpload('/leads/import/preview', formData);
+        setPreviewData(data);
+        toast.success(`Server parsed ${data.previewRows?.length || 0} preview rows`);
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to inspect file');
+        setFile(null);
+      }
     } finally {
       setIsUploading(false);
+      setWorkerProgress(null);
     }
   };
 
@@ -79,23 +118,26 @@ export const ImportPage: React.FC = () => {
       setImportResult(data);
       setPreviewData(null);
       setFile(null);
+      toast.success(`Successfully imported ${data.ok || 0} leads into sales pipeline!`);
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Import commit failed'),
   });
 
   const downloadSampleExcel = async () => {
     try {
       await downloadFile('/leads/import/sample-xlsx', 'lead-import-sample.xlsx');
+      toast.success('Sample Excel template downloaded');
     } catch (err: any) {
-      alert(err.message || 'Download failed');
+      toast.error(err.message || 'Download failed');
     }
   };
 
   const downloadSampleCsv = async () => {
     try {
       await downloadFile('/leads/import/sample-csv', 'lead-import-sample.csv');
+      toast.success('Sample CSV template downloaded');
     } catch (err: any) {
-      alert(err.message || 'Download failed');
+      toast.error(err.message || 'Download failed');
     }
   };
 
@@ -133,20 +175,45 @@ export const ImportPage: React.FC = () => {
         <UploadCloud className="w-12 h-12 text-amber-500 mx-auto mb-3" />
         <h3 className="text-base font-bold text-slate-800">Upload Solar Leads Spreadsheet</h3>
         <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-4">
-          Accepts .xlsx and .csv files up to 10,000 rows. Use our official sample templates above for the best formatting.
+          Accepts .xlsx and .csv files exceeding 25,000+ rows. Decoding is handled entirely via background WebWorkers for zero UI latency.
         </p>
 
-        <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 cursor-pointer shadow-sm">
+        <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 cursor-pointer shadow-sm active:scale-95 transition-all">
           <span>Choose File from Device</span>
           <input
             type="file"
-            accept=".xlsx,.csv"
+            accept=".xlsx,.xls,.csv"
             onChange={handleFileChange}
             className="hidden"
           />
         </label>
 
-        {isUploading && (
+        {/* Worker Streaming Progress Indicator */}
+        {workerProgress && (
+          <div className="mt-5 max-w-md mx-auto p-4 rounded-2xl bg-amber-50 border border-amber-200/80 text-left animate-in fade-in">
+            <div className="flex items-center justify-between text-xs font-bold text-amber-950 mb-1.5">
+              <span className="flex items-center gap-1.5">
+                <Cpu className="w-4 h-4 text-amber-600 animate-pulse" />
+                <span className="capitalize">Worker Streaming: {workerProgress.stage.replace('_', ' ')}</span>
+              </span>
+              <span>{workerProgress.percent}%</span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-amber-200/60 overflow-hidden">
+              <div
+                className="h-full bg-amber-500 transition-all duration-150 rounded-full"
+                style={{ width: `${workerProgress.percent}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-amber-800 mt-2 flex items-center justify-between">
+              <span>Rows processed: {workerProgress.rowsProcessed.toLocaleString()}</span>
+              {workerProgress.totalEstimate ? (
+                <span>of ~{workerProgress.totalEstimate.toLocaleString()} rows</span>
+              ) : null}
+            </p>
+          </div>
+        )}
+
+        {isUploading && !workerProgress && (
           <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
             <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
             <span>Scanning, sanitizing formula triggers and parsing columns...</span>
@@ -165,11 +232,19 @@ export const ImportPage: React.FC = () => {
       {/* Preview & Distribution Rules */}
       {previewData && (
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-5 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
             <div>
-              <h3 className="font-bold text-sm text-slate-900">Validated Ingestion Preview ({file?.name})</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-slate-900">Validated Ingestion Preview ({file?.name})</h3>
+                {workerDuration !== null && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                    <Zap className="w-3 h-3 text-amber-500" />
+                    WebWorker: {workerDuration}ms
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-500">
-                Found {previewData.headers.length} headers • ~{previewData.totalRowsEstimate} rows detected
+                Found {previewData.headers.length} headers • ~{previewData.totalRowsEstimate.toLocaleString()} rows detected
               </p>
             </div>
             <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
@@ -213,9 +288,9 @@ export const ImportPage: React.FC = () => {
                   onChange={(e) => setSplitField(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-slate-200 bg-white"
                 >
-                  <option value="city">City / Geography (Pune, Mumbai, Nashik...)</option>
+                  <option value="city">City / Geography (Indore, Bhopal, Jabalpur, Gwalior, Pune...)</option>
                   <option value="category">Category (Residential / Commercial)</option>
-                  <option value="source">Marketing Source (FB, Google, WhatsApp...)</option>
+                  <option value="source">Marketing Source (Self, Company Database, WhatsApp, Ads...)</option>
                 </select>
               </div>
               <div>

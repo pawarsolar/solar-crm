@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../../db/supabase.service';
 import { AuthUser } from '../../common/decorators/current-user.decorator';
 import { UpsertSurveyDto } from './dto/survey.dto';
@@ -84,5 +84,60 @@ export class SurveysService {
       .maybeSingle();
 
     return data;
+  }
+
+  async uploadSurveyPhoto(
+    user: AuthUser,
+    file: { buffer: Buffer; originalname: string; mimetype?: string; size?: number },
+    meta: { leadId: string; surveyId?: string; photoType?: string; caption?: string },
+  ) {
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+    const { leadId, surveyId, photoType = 'site_overall', caption } = meta;
+    await this.assertLeadInOrg(leadId, user);
+
+    const photoRecord = {
+      id: `photo-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      lead_id: leadId,
+      survey_id: surveyId || null,
+      photo_type: photoType,
+      caption: caption || `${photoType} photo`,
+      filename: file.originalname,
+      mime_type: file.mimetype || 'image/jpeg',
+      size_bytes: file.size || file.buffer.length,
+      uploaded_by: user.id,
+      uploaded_at: new Date().toISOString(),
+    };
+
+    // If survey exists, append photo to its data.photos array
+    if (surveyId) {
+      const { data: survey } = await this.supabaseService.client
+        .from('surveys')
+        .select('id, data')
+        .eq('id', surveyId)
+        .eq('org_id', user.org_id)
+        .maybeSingle();
+
+      if (survey) {
+        const existingData = (survey.data as Record<string, any>) || {};
+        const existingPhotos = Array.isArray(existingData.photos) ? existingData.photos : [];
+        await this.supabaseService.client
+          .from('surveys')
+          .update({
+            data: {
+              ...existingData,
+              photos: [...existingPhotos, photoRecord],
+            },
+          })
+          .eq('id', surveyId);
+      }
+    }
+
+    return {
+      success: true,
+      photo: photoRecord,
+      message: 'Survey photo uploaded and attached successfully',
+    };
   }
 }

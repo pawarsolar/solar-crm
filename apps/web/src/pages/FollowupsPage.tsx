@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { toast } from '../context/ToastContext';
 import { Lead } from '../components/leads/LeadCard';
 
 export const FollowupsPage: React.FC = () => {
@@ -76,9 +77,9 @@ export const FollowupsPage: React.FC = () => {
       setNote('');
       setNextDate('');
       setStage('');
-      alert('Follow-up activity recorded and pipeline updated!');
+      toast.success('Follow-up activity recorded and pipeline updated!');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to record follow-up'),
   });
 
   return (

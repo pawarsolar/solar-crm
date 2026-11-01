@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { apiRequest } from '../../lib/api';
+import { toast } from '../../context/ToastContext';
 import {
   User,
   Phone,
@@ -105,11 +106,14 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth-sessions'] });
       queryClient.invalidateQueries({ queryKey: ['auth-activity'] });
+      toast.success('Device session revoked successfully');
       setSuccessMsg('Device session revoked successfully');
       setTimeout(() => setSuccessMsg(null), 3000);
     },
     onError: (err: any) => {
-      setErrorMsg(err.message || 'Failed to revoke session');
+      const msg = err.message || 'Failed to revoke session';
+      setErrorMsg(msg);
+      toast.error(msg, { title: 'Session Revocation Failed' });
       setTimeout(() => setErrorMsg(null), 4000);
     },
   });
@@ -134,17 +138,23 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     setSuccessMsg(null);
 
     if (!fullName.trim()) {
-      setErrorMsg('Full name cannot be blank.');
+      const msg = 'Full name cannot be blank.';
+      setErrorMsg(msg);
+      toast.error(msg);
       return;
     }
 
     if (showPasswordSection) {
       if (newPassword.length < 6) {
-        setErrorMsg('New password must be at least 6 characters.');
+        const msg = 'New password must be at least 6 characters.';
+        setErrorMsg(msg);
+        toast.error(msg);
         return;
       }
       if (newPassword !== confirmPassword) {
-        setErrorMsg('New password and confirm password do not match.');
+        const msg = 'New password and confirm password do not match.';
+        setErrorMsg(msg);
+        toast.error(msg);
         return;
       }
     }
@@ -170,12 +180,15 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         phone: res.phone || phone.trim(),
       });
 
+      toast.success('Profile updated successfully!');
       setSuccessMsg('Profile updated successfully!');
       setTimeout(() => {
         onClose();
       }, 1200);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to update profile. Please try again.');
+      const msg = err.message || 'Failed to update profile. Please try again.';
+      setErrorMsg(msg);
+      toast.error(msg, { title: 'Update Failed' });
     } finally {
       setIsLoading(false);
     }

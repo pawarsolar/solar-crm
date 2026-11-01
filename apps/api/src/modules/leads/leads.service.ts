@@ -31,19 +31,44 @@ function generateRealisticLeads(count = 300): any[] {
     'More', 'Gaikwad', 'Jadhav', 'Bhosale', 'Bhatia', 'Verma', 'Gupta', 'Tambe', 'Kale', 'Sawant',
   ];
   const locations = [
+    { city: 'Indore', state: 'Madhya Pradesh' },
+    { city: 'Bhopal', state: 'Madhya Pradesh' },
+    { city: 'Jabalpur', state: 'Madhya Pradesh' },
+    { city: 'Gwalior', state: 'Madhya Pradesh' },
+    { city: 'Ujjain', state: 'Madhya Pradesh' },
+    { city: 'Sagar', state: 'Madhya Pradesh' },
+    { city: 'Dewas', state: 'Madhya Pradesh' },
+    { city: 'Satna', state: 'Madhya Pradesh' },
+    { city: 'Ratlam', state: 'Madhya Pradesh' },
+    { city: 'Rewa', state: 'Madhya Pradesh' },
+    { city: 'Pithampur', state: 'Madhya Pradesh' },
+    { city: 'Mandideep', state: 'Madhya Pradesh' },
+    { city: 'Singrauli', state: 'Madhya Pradesh' },
+    { city: 'Chhindwara', state: 'Madhya Pradesh' },
+    { city: 'Katni', state: 'Madhya Pradesh' },
+    { city: 'Khandwa', state: 'Madhya Pradesh' },
+    { city: 'Khargone', state: 'Madhya Pradesh' },
+    { city: 'Shivpuri', state: 'Madhya Pradesh' },
+    { city: 'Vidisha', state: 'Madhya Pradesh' },
     { city: 'Pune', state: 'Maharashtra' },
     { city: 'Mumbai', state: 'Maharashtra' },
     { city: 'Nagpur', state: 'Maharashtra' },
-    { city: 'Nashik', state: 'Maharashtra' },
-    { city: 'Aurangabad', state: 'Maharashtra' },
-    { city: 'Thane', state: 'Maharashtra' },
-    { city: 'Kolhapur', state: 'Maharashtra' },
-    { city: 'Solapur', state: 'Maharashtra' },
   ];
   const stages = [
     'NEW', 'CONTACTED', 'QUALIFIED', 'SURVEY_SCHEDULED', 'SURVEY_DONE', 'QUOTATION_SENT', 'NEGOTIATION', 'BOOKED',
   ];
-  const sources = ['facebook_ads', 'google_ads', 'referral', 'whatsapp', 'walk_in', 'website'];
+  const sources = [
+    'company_data',
+    'self',
+    'whatsapp',
+    'inbound_call',
+    'referral',
+    'walk_in',
+    'field_canvassing',
+    'fb_ads',
+    'google_ads',
+    'website',
+  ];
   const staff = [
     { id: '22222222-2222-2222-2222-222222222225', full_name: 'Rohan Mehta', role: 'sales_exec' },
     { id: '22222222-2222-2222-2222-222222222226', full_name: 'Pooja Joshi', role: 'sales_exec' },

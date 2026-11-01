@@ -37,4 +37,14 @@ export class HealthController {
   async recheckSchema(): Promise<SchemaHealthReport> {
     return this.supabaseService.checkSchemaHealth();
   }
+
+  /**
+   * Proactively triggers PostgREST schema cache reload via NOTIFY pgrst and returns fresh status.
+   */
+  @Post('schema/reload')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('super_admin', 'sales_admin')
+  async reloadSchemaCache() {
+    return this.supabaseService.triggerSchemaReload();
+  }
 }

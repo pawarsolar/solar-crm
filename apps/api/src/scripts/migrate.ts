@@ -46,13 +46,21 @@ async function runMigrations() {
     }
 
     console.log(`📄 [Database Migration] Reading schema definitions from: ${resolvedPath}`);
-    const sql = fs.readFileSync(resolvedPath, 'utf8');
+    const sql = await fs.promises.readFile(resolvedPath, 'utf8');
 
     const client = await pool.connect();
     try {
       console.log('⚡ [Database Migration] Applying schema migrations...');
       await client.query("select set_config('app.bypass_rls', 'on', false)");
       await client.query(sql);
+
+      // Notify PostgREST to reload its schema cache
+      try {
+        await client.query("NOTIFY pgrst, 'reload schema'");
+        console.log('🔄 [Database Migration] PostgREST schema cache reload signal dispatched.');
+      } catch (notifyErr: any) {
+        console.warn('⚠️  [Database Migration] NOTIFY pgrst warning:', notifyErr.message);
+      }
 
       // Verify created tables
       const res = await client.query(`

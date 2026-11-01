@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sun, Lock, Mail, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { toast } from '../context/ToastContext';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,9 +18,12 @@ export const LoginPage: React.FC = () => {
     setErrorMsg(null);
     try {
       await login(email, password);
+      toast.success('Signed in successfully. Welcome to Kyros Solar!');
       navigate('/');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Login failed. Please check your credentials.');
+      const msg = err.message || 'Login failed. Please check your credentials.';
+      setErrorMsg(msg);
+      toast.error(msg, { title: 'Authentication Failed' });
     }
   };
 

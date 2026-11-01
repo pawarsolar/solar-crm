@@ -23,6 +23,7 @@ import { LeadFunnelChart } from '../components/charts/LeadFunnelChart';
 import { apiRequest, downloadFile } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { FeatureGate } from '../components/ui/FeatureGate';
+import { toast } from '../context/ToastContext';
 
 const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#64748b'];
 
@@ -50,16 +51,18 @@ export const DashboardPage: React.FC = () => {
   const handleExportExcel = async () => {
     try {
       await downloadFile('/exports/pipeline.xlsx', 'pipeline.xlsx');
+      toast.success('Pipeline Excel report downloaded');
     } catch (err: any) {
-      alert(err.message || 'Export failed');
+      toast.error(err.message || 'Export failed');
     }
   };
 
   const handleExportPdf = async () => {
     try {
       await downloadFile('/exports/pipeline.pdf', 'pipeline.pdf');
+      toast.success('Pipeline PDF summary downloaded');
     } catch (err: any) {
-      alert(err.message || 'Export failed');
+      toast.error(err.message || 'Export failed');
     }
   };
 
@@ -70,9 +73,9 @@ export const DashboardPage: React.FC = () => {
         body: { report: 'executive_pipeline_summary' },
       });
       navigator.clipboard.writeText(window.location.origin + res.shareUrl);
-      alert('Secure expiring share link copied to clipboard!');
+      toast.success('Secure expiring share link copied to clipboard!');
     } catch (err: any) {
-      alert(err.message || 'Failed to create share link');
+      toast.error(err.message || 'Failed to create share link');
     }
   };
 

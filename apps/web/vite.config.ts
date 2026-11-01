@@ -52,6 +52,11 @@ export default defineConfig({
       },
     }),
   ],
+  resolve: {
+    alias: {
+      three: 'three/src/Three.js',
+    },
+  },
   server: {
     port: 5173,
     proxy: {
@@ -64,6 +69,9 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    minify: 'esbuild',
+    cssMinify: true,
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -129,6 +137,24 @@ export default defineConfig({
             normalizedId.includes('/node_modules/idb-keyval/')
           ) {
             return 'vendor-storage';
+          }
+
+          // Three.js Shader chunks and library (pure templates & uniforms, ~140 kB)
+          if (normalizedId.includes('/node_modules/three/src/renderers/shaders/')) {
+            return 'vendor-three-shaders';
+          }
+          // Three.js WebGL renderer pipeline (~220 kB)
+          if (normalizedId.includes('/node_modules/three/src/renderers/')) {
+            return 'vendor-three-renderer';
+          }
+          // Three.js Core, Math, Geometries, Materials, Lights (~210 kB)
+          if (normalizedId.includes('/node_modules/three/')) {
+            return 'vendor-three-core';
+          }
+
+          // QR Code Generator
+          if (normalizedId.includes('/node_modules/qrcode/')) {
+            return 'vendor-qrcode';
           }
 
           return undefined;

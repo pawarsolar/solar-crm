@@ -1,0 +1,23 @@
+# Gitleaks Configuration for Solar EPC CRM
+# Detects and prevents hardcoded secrets, API tokens, and credentials in git commits.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist for non-sensitive environment templates and test mocks"
+paths = [
+  '''^\.env\.example$''',
+  '''^\.env\.local\.example$''',
+  '''^\.env\.production\.example$''',
+  '''\.spec\.ts$''',
+  '''\.test\.ts$''',
+  '''package-lock\.json$'''
+]
+
+regexes = [
+  '''dummy_service_role_key_for_dev''',
+  '''your_supabase_anon_key_here''',
+  '''your_supabase_service_role_key''',
+  '''your_production_.*'''
+]

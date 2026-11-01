@@ -25,10 +25,12 @@ import {
   Loader2,
   X,
   HelpCircle,
+  Tag,
 } from 'lucide-react';
 import { apiRequest } from '../../lib/api';
 import { BulkAllocationModal } from './BulkAllocationModal';
 import { AllocationHistoryModal } from './AllocationHistoryModal';
+import { MP_CITIES, LEAD_SOURCES, formatLeadSource } from '../../data/lead-options';
 
 export interface LeadTableRow {
   id: string;
@@ -37,6 +39,7 @@ export interface LeadTableRow {
   email?: string;
   city?: string;
   state?: string;
+  source?: string;
   stage: string;
   system_kw?: number;
   monthly_bill?: number;
@@ -77,6 +80,7 @@ export const BulkAllocationTable: React.FC = () => {
   const [stageFilter, setStageFilter] = useState('ALL');
   const [assigneeFilter, setAssigneeFilter] = useState('ALL'); // 'ALL' | 'UNASSIGNED' | userId
   const [cityFilter, setCityFilter] = useState('ALL');
+  const [sourceFilter, setSourceFilter] = useState('ALL');
   const [dateFilter, setDateFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -105,12 +109,13 @@ export const BulkAllocationTable: React.FC = () => {
 
   // Query Leads
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['leads-bulk', stageFilter, assigneeFilter, cityFilter, dateFilter, searchTerm, page, pageSize],
+    queryKey: ['leads-bulk', stageFilter, assigneeFilter, cityFilter, sourceFilter, dateFilter, searchTerm, page, pageSize],
     queryFn: () => {
       const params = new URLSearchParams();
       if (stageFilter !== 'ALL') params.append('stage', stageFilter);
       if (assigneeFilter !== 'ALL') params.append('owner_id', assigneeFilter);
       if (cityFilter !== 'ALL') params.append('city', cityFilter);
+      if (sourceFilter !== 'ALL') params.append('source', sourceFilter);
       if (dateFilter !== 'ALL') params.append('date_preset', dateFilter);
       if (searchTerm) params.append('q', searchTerm);
       params.append('page', String(page));
@@ -126,7 +131,7 @@ export const BulkAllocationTable: React.FC = () => {
   // Sync selection state if filters change
   useEffect(() => {
     setIsAllMatchingQuery(false);
-  }, [stageFilter, assigneeFilter, cityFilter, dateFilter, searchTerm]);
+  }, [stageFilter, assigneeFilter, cityFilter, sourceFilter, dateFilter, searchTerm]);
 
   // Window mouseup listener for drag-selection completion
   useEffect(() => {
@@ -374,21 +379,41 @@ export const BulkAllocationTable: React.FC = () => {
             </select>
           </div>
 
-          {/* City Filter */}
+          {/* MP City Filter */}
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-400 font-medium">City:</span>
+            <span className="text-slate-400 font-medium">MP City:</span>
             <select
               value={cityFilter}
               onChange={(e) => {
                 setCityFilter(e.target.value);
                 setPage(1);
               }}
-              className="text-xs font-semibold py-1 px-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-amber-500"
+              className="text-xs font-semibold py-1 px-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-amber-500 max-w-[130px] truncate"
             >
-              <option value="ALL">All Cities</option>
-              {['Pune', 'Mumbai', 'Nagpur', 'Nashik', 'Aurangabad', 'Thane', 'Kolhapur'].map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              <option value="ALL">All MP Cities</option>
+              {MP_CITIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Lead Source Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-400 font-medium">Source:</span>
+            <select
+              value={sourceFilter}
+              onChange={(e) => {
+                setSourceFilter(e.target.value);
+                setPage(1);
+              }}
+              className="text-xs font-semibold py-1 px-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-amber-500 max-w-[140px] truncate"
+            >
+              <option value="ALL">All Sources</option>
+              {LEAD_SOURCES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
                 </option>
               ))}
             </select>
@@ -631,12 +656,19 @@ export const BulkAllocationTable: React.FC = () => {
                         ) : null}
                       </td>
 
-                      {/* Location */}
+                      {/* Location & Source */}
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1 text-slate-600">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{lead.city || 'Maharashtra'}</span>
+                        <div className="flex items-center gap-1 text-slate-700 font-medium">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span>{lead.city || 'MP Location'}</span>
                         </div>
+                        {lead.source && (
+                          <div className="mt-1">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${formatLeadSource(lead.source).badgeClass}`}>
+                              {formatLeadSource(lead.source).label}
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Assignee */}
@@ -765,6 +797,7 @@ export const BulkAllocationTable: React.FC = () => {
           stage: stageFilter !== 'ALL' ? stageFilter : undefined,
           owner_id: assigneeFilter !== 'ALL' ? assigneeFilter : undefined,
           city: cityFilter !== 'ALL' ? cityFilter : undefined,
+          source: sourceFilter !== 'ALL' ? sourceFilter : undefined,
           q: searchTerm || undefined,
         }}
         onSuccess={() => {

@@ -16,9 +16,17 @@ import {
   FileText,
   Loader2,
   ChevronRight,
+  Camera,
+  Sun,
+  Box,
+  MapPin,
+  Tag,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { toast } from '../context/ToastContext';
+import { SurveyPhotoCaptureModal } from '../components/survey/SurveyPhotoCaptureModal';
+import { formatLeadSource } from '../data/lead-options';
 
 const STAGES = [
   'NEW',
@@ -52,6 +60,7 @@ export const LeadDetailPage: React.FC = () => {
   const [stageNote, setStageNote] = useState('');
   const [deletionReason, setDeletionReason] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
   const { data: lead, isLoading } = useQuery({
     queryKey: ['lead', id],
@@ -69,9 +78,9 @@ export const LeadDetailPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['lead', id] });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       setStageNote('');
-      alert('Lead stage updated successfully');
+      toast.success('Lead stage updated successfully');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to update lead stage'),
   });
 
   const isSuperAdmin = user?.role === 'super_admin';
@@ -84,10 +93,10 @@ export const LeadDetailPage: React.FC = () => {
     onSuccess: (res) => {
       setShowDeleteModal(false);
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      alert(res.message || 'Lead moved to 30-day Recovery Bin. It can be restored anytime by Super Admin within 30 days.');
+      toast.success(res.message || 'Lead moved to 30-day Recovery Bin. It can be restored anytime by Super Admin.');
       navigate('/leads');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to delete lead'),
   });
 
   const deleteRequestMutation = useMutation({
@@ -98,9 +107,9 @@ export const LeadDetailPage: React.FC = () => {
       }),
     onSuccess: (res) => {
       setShowDeleteModal(false);
-      alert(res.message);
+      toast.success(res.message || 'Deletion approval request submitted to Super Admin');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message || 'Failed to submit delete request'),
   });
 
   if (isLoading) {
@@ -170,9 +179,16 @@ export const LeadDetailPage: React.FC = () => {
                 {lead.stage.replace('_', ' ')}
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {lead.city || 'City not set'}, {lead.state || 'Maharashtra'} • {lead.source || 'Direct'}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap mt-1 text-xs text-slate-500">
+              <span className="flex items-center gap-1 font-medium text-slate-700">
+                <MapPin className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                {lead.city || 'Indore'}, {lead.state || 'Madhya Pradesh (MP)'}
+              </span>
+              <span className="text-slate-300">•</span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${formatLeadSource(lead.source).badgeClass}`}>
+                Source: {formatLeadSource(lead.source).label}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -192,6 +208,13 @@ export const LeadDetailPage: React.FC = () => {
               <MessageSquare className="w-3.5 h-3.5" />
               <span>WhatsApp</span>
             </a>
+            <button
+              onClick={() => navigate(`/system-design?leadId=${lead.id}`)}
+              className="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-bold flex items-center gap-1.5 hover:bg-amber-400 shadow-sm transition-all active:scale-95 cursor-pointer"
+            >
+              <Box className="w-3.5 h-3.5" />
+              <span>3D Solar Studio</span>
+            </button>
           </div>
         </div>
 
@@ -305,6 +328,13 @@ export const LeadDetailPage: React.FC = () => {
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-slate-900 text-sm">Site Survey Specifications</h3>
+            <button
+              onClick={() => setIsPhotoModalOpen(true)}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 hover:bg-amber-400 flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer min-h-[36px]"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>Capture Site Photos</span>
+            </button>
           </div>
           {lead.surveys && lead.surveys.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -498,6 +528,15 @@ export const LeadDetailPage: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+
+      {lead && (
+        <SurveyPhotoCaptureModal
+          isOpen={isPhotoModalOpen}
+          onClose={() => setIsPhotoModalOpen(false)}
+          leadId={lead.id}
+          surveyId={lead.surveys?.[0]?.id}
+        />
       )}
     </div>
   );

@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { apiRequest } from '../../lib/api';
+import { toast } from '../../context/ToastContext';
 
 interface RecoverableLead {
   id: string;
@@ -55,9 +56,9 @@ export const LeadRecoveryBinModal: React.FC<LeadRecoveryBinModalProps> = ({
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['lead-recovery-bin'] });
-      alert(res.message || 'Lead successfully restored to sales pipeline!');
+      toast.success(res.message || 'Lead successfully restored to sales pipeline!');
     },
-    onError: (err: any) => alert(err.message || 'Failed to restore lead'),
+    onError: (err: any) => toast.error(err.message || 'Failed to restore lead'),
   });
 
   const permanentDeleteMutation = useMutation({
@@ -67,9 +68,9 @@ export const LeadRecoveryBinModal: React.FC<LeadRecoveryBinModalProps> = ({
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['lead-recovery-bin'] });
-      alert(res.message || 'Lead permanently deleted from system');
+      toast.success(res.message || 'Lead permanently deleted from system');
     },
-    onError: (err: any) => alert(err.message || 'Failed to permanently delete lead'),
+    onError: (err: any) => toast.error(err.message || 'Failed to permanently delete lead'),
   });
 
   if (!isOpen) return null;

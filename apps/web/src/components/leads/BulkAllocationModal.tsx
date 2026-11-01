@@ -15,6 +15,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { apiRequest } from '../../lib/api';
+import { toast } from '../../context/ToastContext';
 
 interface StaffWorkload {
   id: string;
@@ -216,10 +217,11 @@ export const BulkAllocationModal: React.FC<BulkAllocationModalProps> = ({
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['staff-workload'] });
       queryClient.invalidateQueries({ queryKey: ['allocation-history'] });
+      toast.success(`Successfully allocated ${data.allocatedCount || data.count || 'batch of'} leads!`);
       onSuccess(data);
     },
     onError: (err: any) => {
-      alert(`Allocation failed: ${err.message}`);
+      toast.error(`Allocation failed: ${err.message}`);
     },
   });
 
