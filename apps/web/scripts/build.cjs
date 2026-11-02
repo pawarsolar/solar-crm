@@ -19,7 +19,9 @@ const buildEnv = {
 // silently download the unrelated `tsc` package from npm if TypeScript is missing.
 function resolveBin(pkg, binPath) {
   try {
-    const pkgJson = require.resolve(`${pkg}/package.json`, { paths: [projectRoot] });
+    const pkgJson = require.resolve(`${pkg}/package.json`, {
+      paths: [projectRoot, path.resolve(projectRoot, '..', '..')]
+    });
     return path.join(path.dirname(pkgJson), binPath);
   } catch (err) {
     console.error(`❌ [@solar-crm/web] Could not find "${pkg}". Make sure devDependencies are installed (NODE_ENV must not be "production" during install).`);

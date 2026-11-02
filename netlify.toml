@@ -4,7 +4,7 @@
 [build]
   base = "apps/web"
   command = "npm run build"
-  publish = "apps/web/dist"
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
@@ -15,7 +15,7 @@
 
 # Production environment configuration
 [context.production]
-  publish = "apps/web/dist"
+  publish = "dist"
   command = "npm run build"
   [context.production.environment]
     NODE_OPTIONS = "--max-old-space-size=4096"
@@ -24,7 +24,7 @@
 # Netlify Deploy Previews for Pull Requests
 # Every Pull Request automatically generates a unique isolated preview URL
 [context.deploy-preview]
-  publish = "apps/web/dist"
+  publish = "dist"
   command = "npm run build"
   [context.deploy-preview.environment]
     NODE_OPTIONS = "--max-old-space-size=4096"
@@ -34,7 +34,7 @@
 
 # Branch Deployments for testing feature branches prior to PR merge
 [context.branch-deploy]
-  publish = "apps/web/dist"
+  publish = "dist"
   command = "npm run build"
   [context.branch-deploy.environment]
     NODE_OPTIONS = "--max-old-space-size=4096"
